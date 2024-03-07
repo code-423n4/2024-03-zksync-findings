@@ -789,3 +789,21 @@ Path: ./code/contracts/ethereum/contracts/bridge/interfaces/IL1SharedBridge.sol
 #### Recommendation
 
 Enhance smart contract efficiency post-deployment by utilizing indexed events. This approach aids in efficiently tracking contract activities, significantly contributing to the reduction of gas costs.
+
+
+### Use `increaseAllowance()`/`decreaseAllowance()` instead of `approve()`/`safeApprove()`
+Changing an allowance with `approve()` brings the risk that someone may use both the old and the new allowance by unfortunate transaction ordering. [Refer to ERC20 API: An Attack Vector on the Approve/TransferFrom Methods](https://docs.google.com/document/d/1YLPtQxZu1UAvO9cZ1O2RPXBbT0mooh4DYKjA_jp-RLM/edit#heading=h.m9fhqynw2xvt). It is recommended to use the `increaseAllowance()`/`decreaseAllowance()` to avoid ths problem.
+
+```solidity
+Path: ./code/system-contracts/contracts/libraries/TransactionHelper.sol
+
+382:                IERC20(token).safeApprove(paymaster, 0);	// @audit-issue
+
+383:                IERC20(token).safeApprove(paymaster, minAllowance);	// @audit-issue
+```
+[382](https://github.com/code-423n4/2024-03-zksync/blob/2fe9d4e62ab688c92a959e265b9094f82502787b/./code/system-contracts/contracts/libraries/TransactionHelper.sol#L382-L382), [383](https://github.com/code-423n4/2024-03-zksync/blob/2fe9d4e62ab688c92a959e265b9094f82502787b/./code/system-contracts/contracts/libraries/TransactionHelper.sol#L383-L383), 
+
+
+#### Recommendation
+
+To enhance the security of your Solidity smart contracts and avoid potential issues related to transaction ordering, it is advisable to use the `increaseAllowance()` and `decreaseAllowance()` functions instead of `approve()` or `safeApprove()`. These functions provide a safer and more atomic way to modify allowances and mitigate the risk associated with potential attack vectors like those described in the [ERC20 API: An Attack Vector on the Approve/TransferFrom Methods](https://docs.google.com/document/d/1YLPtQxZu1UAvO9cZ1O2RPXBbT0mooh4DYKjA_jp-RLM/edit#heading=h.m9fhqynw2xvt) document.
