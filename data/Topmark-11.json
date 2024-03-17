@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Topmark",
+  "risk": "2",
+  "title": "When a batch, initially committed with system contract upgrades, is rolled back using the revertBatches() function to stop its execution, any subsequent batches that were meant to be committed without system contract upgrades will instead be committed as if they had system contract upgrades",
+  "issueId": 11,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/11"
+}
