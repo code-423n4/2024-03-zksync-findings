@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Topmark",
+  "risk": "3",
+  "title": "Chain Cannot be unFreezed after Freezing by State Transition Manager",
+  "issueId": 20,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/20"
+}
