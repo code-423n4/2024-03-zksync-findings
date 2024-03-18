@@ -2,9 +2,9 @@
 
 ##
 
-## [G-1] l2BridgeAddress[_chainId] mapping can be cached 
+## [G-1] l2BridgeAddress[_chainId] , l2BridgeAddress[ERA_CHAIN_ID] mappings can be cached 
 
- ``l2BridgeAddress[_chainId]`` is a mapping that is accessed multiple times within a function.Caching this mapping could indeed be beneficial for optimizing gas usage. Saves ``100 GAS`` , ``1 LOAD``
+ ``l2BridgeAddress[_chainId]`` is a mapping that is accessed multiple times within a function.Caching this mapping could indeed be beneficial for optimizing gas usage. Saves ``200 GAS`` , ``2 LOAD``
 
 ```diff
 FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
@@ -66,6 +66,66 @@ address l2BridgeAddress_ = l2BridgeAddress[_chainId] ;
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L188-L221
 
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+function depositLegacyErc20Bridge(
+        address _prevMsgSender,
+        address _l2Receiver,
+        address _l1Token,
+        uint256 _amount,
+        uint256 _l2TxGasLimit,
+        uint256 _l2TxGasPerPubdataByte,
+        address _refundRecipient
+    ) external payable override onlyLegacyBridge nonReentrant returns (bytes32 l2TxHash) {
++ address l2BridgeAddress_ = l2BridgeAddress[ERA_CHAIN_ID] ; 
+-        require(l2BridgeAddress[ERA_CHAIN_ID] != address(0), "ShB b. n dep");
++        require(l2BridgeAddress_ != address(0), "ShB b. n dep");
+        require(_l1Token != l1WethAddress, "ShB: WETH deposit not supported 2");
+
+        // Note that funds have been transferred to this contract in the legacy ERC20 bridge.
+        if (!hyperbridgingEnabled[ERA_CHAIN_ID]) {
+            chainBalance[ERA_CHAIN_ID][_l1Token] += _amount;
+        }
+
+        bytes memory l2TxCalldata = _getDepositL2Calldata(_prevMsgSender, _l2Receiver, _l1Token, _amount);
+
+        {
+            // If the refund recipient is not specified, the refund will be sent to the sender of the transaction.
+            // Otherwise, the refund will be sent to the specified address.
+            // If the recipient is a contract on L1, the address alias will be applied.
+            address refundRecipient = _refundRecipient;
+            if (_refundRecipient == address(0)) {
+                refundRecipient = _prevMsgSender != tx.origin
+                    ? AddressAliasHelper.applyL1ToL2Alias(_prevMsgSender)
+                    : _prevMsgSender;
+            }
+
+            L2TransactionRequestDirect memory request = L2TransactionRequestDirect({
+                chainId: ERA_CHAIN_ID,
+-                l2Contract: l2BridgeAddress[ERA_CHAIN_ID],
++                l2Contract: l2BridgeAddress_ ,
+                mintValue: msg.value, // l2 gas + l2 msg.Value the bridgehub will withdraw the mintValue from the base token bridge for gas
+                l2Value: 0, // L2 msg.value, this contract doesn't support base token deposits or wrapping functionality, for direct deposits use bridgehub
+                l2Calldata: l2TxCalldata,
+                l2GasLimit: _l2TxGasLimit,
+                l2GasPerPubdataByteLimit: _l2TxGasPerPubdataByte,
+                factoryDeps: new bytes[](0),
+                refundRecipient: refundRecipient
+            });
+            l2TxHash = bridgehub.requestL2TransactionDirect{value: msg.value}(request);
+        }
+
+        bytes32 txDataHash = keccak256(abi.encode(_prevMsgSender, _l1Token, _amount));
+        // Save the deposited amount to claim funds on L1 if the deposit failed on L2
+        depositHappened[ERA_CHAIN_ID][l2TxHash] = txDataHash;
+
+        emit LegacyDepositInitiated(ERA_CHAIN_ID, l2TxHash, _prevMsgSender, _l2Receiver, _l1Token, _amount);
+    }
+
+```
+
 ##
 
 ## [G-] Don't cache state variable only used once
@@ -86,4 +146,69 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
 
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L339-L344
+
+##
+
+## [G-3] ``chainBalance[_chainId][_l1Token]`` can be cached
+
+Caching chainBalance[_chainId][_l1Token] can lead to gas savings, Saves ``200 GAS`` , ``2 SLOD``
+
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+if (!hyperbridgingEnabled[_chainId]) {
+            // check that the chain has sufficient balance
++    uint256 chainBalanceAmount_ = chainBalance[_chainId][_l1Token] ;
+-            require(chainBalance[_chainId][_l1Token] >= _amount, "ShB n funds");
++            require(chainBalanceAmount_ >= _amount, "ShB n funds");
+-            chainBalance[_chainId][_l1Token] -= _amount;
++            chainBalance[_chainId][_l1Token] = chainBalanceAmount_ - _amount;
+        }
+
+
+437: if (!hyperbridgingEnabled[_chainId]) {
+            // Check that the chain has sufficient balance
++    uint256 chainBalanceAmount_ = chainBalance[_chainId][_l1Token] ;
+-           require(chainBalance[_chainId][l1Token] >= amount, "ShB not enough funds 2"); // not enought funds
++           require(chainBalanceAmount_ >= amount, "ShB not enough funds 2"); // not enought funds
+-            chainBalance[_chainId][l1Token] -= amount;
++            chainBalance[_chainId][_l1Token] = chainBalanceAmount_ - _amount;
+        }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L349-L350
+
+##
+
+## [G-] Parameter validation prior to storage Validations for better gas efficiency 
+
+Function parameters should be checked before storage variables
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+ function depositLegacyErc20Bridge(
+        address _prevMsgSender,
+        address _l2Receiver,
+        address _l1Token,
+        uint256 _amount,
+        uint256 _l2TxGasLimit,
+        uint256 _l2TxGasPerPubdataByte,
+        address _refundRecipient
+    ) external payable override onlyLegacyBridge nonReentrant returns (bytes32 l2TxHash) {
+-        require(l2BridgeAddress[ERA_CHAIN_ID] != address(0), "ShB b. n dep");
+        require(_l1Token != l1WethAddress, "ShB: WETH deposit not supported 2");
++        require(l2BridgeAddress[ERA_CHAIN_ID] != address(0), "ShB b. n dep");
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L554-L564
+
+
+
+
+
+
 
