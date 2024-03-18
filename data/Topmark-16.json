@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Topmark",
+  "risk": "2",
+  "title": "Faucet Position is not Deleted after Deleting Faucet",
+  "issueId": 16,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/16"
+}
