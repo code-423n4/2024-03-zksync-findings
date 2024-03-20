@@ -73,4 +73,44 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L115
 
+##
+
+## [L-] No same value input check
+
+There is no check to ensure that the new pending admin (_newPendingAdmin) is different from the current pending admin (s.pendingAdmin). This means that if the function is called with the same value as the current pendingAdmin, it would still execute and emit an event, wasting gas and potentially causing confusion.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+
+ /// @inheritdoc IAdmin
+    function setPendingAdmin(address _newPendingAdmin) external onlyAdmin {
+        // Save previous value into the stack to put it into the event later
+        address oldPendingAdmin = s.pendingAdmin;
+        // Change pending admin
+        s.pendingAdmin = _newPendingAdmin;
+        emit NewPendingAdmin(oldPendingAdmin, _newPendingAdmin);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L23-L29
+
+##
+
+## [L-] Allowance of redundant validator status assignments 
+
+The absence of a check to see if _validator is already set to ``_active`` means the function will execute and emit an event even if there is no actual change in status. This can lead to unnecessary gas expenditure and redundant event logs, which could clutter up the event history and potentially confuse off-chain systems or services monitoring these events.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+
+/// @inheritdoc IAdmin
+    function setValidator(address _validator, bool _active) external onlyStateTransitionManager {
+        s.validators[_validator] = _active;
+        emit ValidatorStatusUpdate(_validator, _active);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L44-L48
+
+
 
