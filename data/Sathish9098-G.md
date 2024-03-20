@@ -2,11 +2,11 @@
 
 ##
 
-## [G-] State variables can be packed into fewer storage slots
+## [G-1] State variables can be packed into fewer storage slots
 
 The EVM works with 32 byte words. Variables less than 32 bytes can be declared next to each other in storage and this will pack the values together into a single 32 byte storage slot (if the values combined are <= 32 bytes). If the variables packed together are retrieved together in functions we will effectively save ~2000 gas with every subsequent SLOAD for that storage slot. This is due to us incurring a Gwarmaccess (100 gas) versus a Gcoldsload (2100 gas).
 
-### ``securityCouncil`` and ``minDelay`` can be packed same Slot 
+### [G-1.1] ``securityCouncil`` and ``minDelay`` can be packed same Slot 
 
 A ``uint96`` variable can hold values up to ``2^96 - 1``, which is a significantly large number. Specifically, it can represent up to over ``79 billion years``. Given that this range is far beyond any practical ``delay duration`` for any process or mechanism, uint96 provides more than sufficient capacity for a ``delay timer`` in ``seconds``. So packing ``securityCouncil`` and ``minDelay`` within same slot is perfectly safe.
 
@@ -35,6 +35,26 @@ contract Governance is IGovernance, Ownable2Step {
 
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L26-L35
+
+##
+
+## [G-1.2] ``genesisUpgrade`` and ``protocolVersion`` can be packed with same slot 
+
+``protocolVersion`` as ``uint96``: uint256 is the default integer type in Solidity, occupying a full 32 bytes (256 bits). Using ``uint96`` (which is significantly smaller but still offers a large maximum value) could be more efficient in terms of storage, especially if it can be packed with other variables. ``uint96`` allows for values up to roughly ``79 quintillion``, which is ample for version numbering and most other conceivable uses. Saves ``2000 GAS`` , ``1 SLOT``
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/StateTransitionManager.sol
+
+ /// @dev genesisUpgrade contract address, used to setChainId
+    address public genesisUpgrade;
+
+    /// @dev current protocolVersion
+-    uint256 public protocolVersion;
++    uint96 public protocolVersion;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L42
 
 ##
 
@@ -290,8 +310,28 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L130
 
-##
+## [G-] Avoid updating storage when the value hasn't changed
 
+If the old value is equal to the new value, not re-storing the value will avoid a Gsreset (2900 gas), potentially at the expense of a Gcoldsload (2100 gas) or a Gwarmaccess (100 gas)
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+
+/// @inheritdoc IAdmin
+    function setValidator(address _validator, bool _active) external onlyStateTransitionManager {
+        s.validators[_validator] = _active;
+        emit ValidatorStatusUpdate(_validator, _active);
+    }
+
+    /// @inheritdoc IAdmin
+    function setPorterAvailability(bool _zkPorterIsAvailable) external onlyStateTransitionManager {
+        // Change the porter availability
+        s.zkPorterIsAvailable = _zkPorterIsAvailable;
+        emit IsPorterAvailableStatusUpdate(_zkPorterIsAvailable);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L44-L55
 
 
 
