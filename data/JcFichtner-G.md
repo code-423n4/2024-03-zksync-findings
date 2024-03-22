@@ -1,181 +1,288 @@
-## [G-01] Optimizing the L1ERC20Bridge Contract
+## [G-01] Refactoring requestL2TransactionDirect and requestL2TransactionTwoBridges in Bridgehub
 
-While the provided contract seems well-structured, there are still some potential areas for gas optimization:
+**`requestL2TransactionDirect` and `requestL2TransactionTwoBridges`:**
 
-###### General Optimizations
+These functions share common logic for interacting with the shared bridge and state transition manager. Consider refactoring them to extract the shared logic into a separate internal function to avoid code duplication and reduce gas costs.
 
-**1 - Cache Storage Variables:**
+Here's how you can refactor the `requestL2TransactionDirect` and `requestL2TransactionTwoBridges` functions in the `Bridgehub` contract to extract shared logic and reduce gas costs:
 
-- In functions like `deposit` and `claimFailedDeposit`, the `depositAmount` mapping is accessed multiple times. Cache the value in a local variable to reduce storage reads.
+**1 - Create a new internal function:**
 
-**2 - Use Unchecked Math:**
-
-- In functions like `_depositFundsToSharedBridge`, where overflows are unlikely due to prior checks or context, consider using unchecked blocks for arithmetic operations.
-
-**3 - Use Custom Errors:**
-
-- Replace `require` statements with custom errors for specific error conditions. This can save gas by reducing the amount of data stored and returned in the revert message.
-
-###### Specific Optimizations
-
-**1 - `deposit` function:**
-
-Instead of calling `_depositFundsToSharedBridge` and then checking if the `amount` is equal to `_amount`, consider modifying `_depositFundsToSharedBridge` to return a boolean indicating success and using a require statement based on the returned value. This can save gas by avoiding an additional comparison.
-
-**2 - `finalizeWithdrawal` function:**
-
-The `isWithdrawalFinalized` mapping is checked and then never used again. Consider removing this check and relying solely on the shared bridge's check to save gas.
-
-###### Additional Considerations
-
-**1 - Use of `safeTransfer` and `safeTransferFrom`:**
-
-While these functions provide additional safety checks, they consume more gas than the standard `transfer` and `transferFrom` functions. If the token contract is known to be reliable and the amounts are guaranteed to be valid, consider using the standard transfer functions instead.
-
-**2 - Alternatives to OpenZeppelin:**
-
-Libraries like `Solmate` and `Solady` offer gas-efficient implementations of common functions. Consider exploring these alternatives for further optimization.
-
-## [G-02] Optimizing the L1SharedBridge Contract
-
-The L1SharedBridge contract facilitates the bridging of assets between Layer 1 (L1) and various hyperchains, supporting both ETH and ERC20 tokens. It's designed to work with a proxy for upgradability, and it interacts with a Bridgehub contract for cross-chain operations, a legacy bridge for backward compatibility, and maintains a mapping of L2 bridges for different chains. The contract includes mechanisms for depositing, withdrawing, and handling failed transactions, with provisions for non-reentrancy and initializable patterns for security and upgradeability.
-
-Here are some gas optimizations for this contract:
-
-###### General Optimizations
-
-**1 - Cache Storage Variables:**
-
-***(A) - `depositHappened` mapping:***
-
-In the `claimFailedDeposit` function, the `depositHappened` mapping is accessed twice:
-
-- First, to check if the deposit happened: `require(depositHappened[_chainId][_l2TxHash] != 0x00, "ShB tx hap");`
-
-- Second, to delete the record after successful claim: `delete depositHappened[_chainId][_l2TxHash];`
-
-***Optimization:*** Cache the value of `depositHappened[_chainId][_l2TxHash]` in a local variable at the beginning of the function and use the local variable for both checks and deletion. This saves one storage read.
-
-***(B) - `chainBalance` mapping:***
-
-In both `claimFailedDeposit` and `_finalizeWithdrawal` functions, the `chainBalance` mapping is accessed twice:
-
-- First, to check if the chain has sufficient balance: `require(chainBalance[_chainId][l1Token] >= amount, ...);`
-
-- Second, to update the balance after withdrawal: `chainBalance[_chainId][l1Token] -= amount;`
-
-***Optimization:*** In both functions, cache the value of `chainBalance[_chainId][l1Token]` in a local variable before the checks and updates. This saves one storage read per function.
-
-**2 - Use Unchecked Math:**
-
-- In the `_depositFunds` function, the subtraction operation `balanceAfter - balanceBefore` is unlikely to underflow due to the prior transfer of tokens. You can wrap this operation in an unchecked block
-
-**3 - Use Custom Errors:**
-
-- Replace `require` statements with custom errors for specific error conditions to save gas on revert messages.
-
-## [G-03] Optimizing the Bridgehub Contract
-
-This contract serves as a central hub for bridging operations, so optimizing it for gas efficiency is crucial. Here are some potential areas for improvement:
-
-###### General Optimizations
-
-1 - Cache Storage Variables:
-
-- In the `requestL2TransactionDirect` function, `the baseToken[_request.chainId]` mapping is accessed twice. Instead, you can cache the value in a local variable
-
-2 - Use Unchecked Math:
-
-- In the createNewChain function, the _chainId is checked to be within the valid range of uint48. Therefore, the subsequent operation _chainId <= type(uint48).max is guaranteed to be true and will not overflow. You can wrap this operation in an unchecked
-
-3 - Use Custom Errors:
-
-- Replace require statements with custom errors for specific error conditions to save gas on revert messages.
-Specific Optimizations:
-
-###### Specific Optimizations
-
-Both `requestL2TransactionDirect` and `requestL2TransactionTwoBridges` handle deposits for both `ETH` and `non-ETH` tokens. However, they currently have separate code blocks for each case, leading to redundancy. Here's how we can refactor them to share common code:
-
-**1 - Extract Common Logic:**
-
-Create a new internal function, let's call it `_handleDeposit`, that takes the following arguments:
-
-- `uint256 _chainId`: The chain ID for the transaction.
-- `address _sender`: The sender of the transaction.
-- `address _token`: The token being deposited (ETH or ERC20).
-- `uint256 _amount`: The amount being deposited.
-
-This function will handle the common logic for both `ETH` and `non-ETH` deposits:
-
-function _handleDeposit(
+function _requestL2Transaction(
     uint256 _chainId,
     address _sender,
-    address _token,
-    uint256 _amount
-) internal {
-    if (_token == ETH_TOKEN_ADDRESS) {
-        require(msg.value == _amount, "Bridgehub: msg.value mismatch");
-    } else {
-        require(msg.value == 0, "Bridgehub: non-eth bridge with msg.value");
-        uint256 withdrawAmount = _depositFunds(_sender, IERC20(_token), _amount);
-        require(withdrawAmount == _amount, "Bridgehub: deposit amount mismatch");
-    }
+    address _l2Contract,
+    uint256 _mintValue,
+    uint256 _l2Value,
+    bytes calldata _l2Calldata,
+    uint256 _l2GasLimit,
+    uint256 _l2GasPerPubdataByteLimit,
+    bytes[] calldata _factoryDeps,
+    address _refundRecipient
+) internal returns (bytes32 canonicalTxHash) {
+    address stateTransition = getStateTransition(_chainId);
+    address refundRecipient = _actualRefundRecipient(_refundRecipient);
 
-    if (!hyperbridgingEnabled[_chainId]) {
-        chainBalance[_chainId][_token] += _amount;
-    }
+    canonicalTxHash = IZkSyncStateTransition(stateTransition).bridgehubRequestL2Transaction(
+        BridgehubL2TransactionRequest({
+            sender: _sender,
+            contractL2: _l2Contract,
+            mintValue: _mintValue,
+            l2Value: _l2Value,
+            l2Calldata: _l2Calldata,
+            l2GasLimit: _l2GasLimit,
+            l2GasPerPubdataByteLimit: _l2GasPerPubdataByteLimit,
+            factoryDeps: _factoryDeps,
+            refundRecipient: refundRecipient
+        })
+    );
 }
 
-1 - Update Existing Functions:
+This internal function encapsulates the common logic of interacting with the shared bridge and state transition manager. It takes all the necessary parameters and returns the canonical transaction hash.
 
-Now, update `requestL2TransactionDirect` and `requestL2TransactionTwoBridges` to call `_handleDeposit` instead of having separate logic for `ETH` and `non-ETH` tokens. 
-
-Here's how the updated functions would look:
-
-- requestL2TransactionDirect:
+**2 - Update `requestL2TransactionDirect`:**
 
 function requestL2TransactionDirect(
     L2TransactionRequestDirect calldata _request
 ) external payable override nonReentrant returns (bytes32 canonicalTxHash) {
-    address token = baseToken[_request.chainId];
-    _handleDeposit(_request.chainId, msg.sender, token, _request.mintValue);
+    {
+        address token = baseToken[_request.chainId];
+        if (token == ETH_TOKEN_ADDRESS) {
+            require(msg.value == _request.mintValue, "Bridgehub: msg.value mismatch 1");
+        } else {
+            require(msg.value == 0, "Bridgehub: non-eth bridge with msg.value");
+        }
 
-    // ... rest of the function logic ...
+        sharedBridge.bridgehubDepositBaseToken{value: msg.value}(
+            _request.chainId,
+            msg.sender,
+            token,
+            _request.mintValue
+        );
+    }
+
+    canonicalTxHash = _requestL2Transaction(
+        _request.chainId,
+        msg.sender,
+        _request.l2Contract,
+        _request.mintValue,
+        _request.l2Value,
+        _request.l2Calldata,
+        _request.l2GasLimit,
+        _request.l2GasPerPubdataByteLimit,
+        _request.factoryDeps,
+        _request.refundRecipient
+    );
 }
 
-- requestL2TransactionTwoBridges:
+The `requestL2TransactionDirect` function now only handles the specific logic related to depositing base tokens and then calls the `_requestL2Transaction` internal function with the appropriate parameters.
+
+**3 - Update requestL2TransactionTwoBridges:**
 
 function requestL2TransactionTwoBridges(
     L2TransactionRequestTwoBridgesOuter calldata _request
 ) external payable override nonReentrant returns (bytes32 canonicalTxHash) {
-    address token = baseToken[_request.chainId];
-    uint256 baseTokenMsgValue = (token == ETH_TOKEN_ADDRESS) ? _request.mintValue : 0;
+    {
+        address token = baseToken[_request.chainId];
+        uint256 baseTokenMsgValue;
+        if (token == ETH_TOKEN_ADDRESS) {
+            require(
+                msg.value == _request.mintValue + _request.secondBridgeValue,
+                "Bridgehub: msg.value mismatch 2"
+            );
+            baseTokenMsgValue = _request.mintValue;
+        } else {
+            require(msg.value == _request.secondBridgeValue, "Bridgehub: msg.value mismatch 3");
+            baseTokenMsgValue = 0;
+        }
+        sharedBridge.bridgehubDepositBaseToken{value: baseTokenMsgValue}(
+            _request.chainId,
+            msg.sender,
+            token,
+            _request.mintValue
+        );
+    }
 
-    _handleDeposit(_request.chainId, msg.sender, token, _request.mintValue);
+    L2TransactionRequestTwoBridgesInner memory outputRequest = IL1SharedBridge(_request.secondBridgeAddress)
+        .bridgehubDeposit{value: _request.secondBridgeValue}(
+        _request.chainId,
+        msg.sender,
+        _request.l2Value,
+        _request.secondBridgeCalldata
+    );
 
-    // ... rest of the function logic ...
+    require(outputRequest.magicValue == TWO_BRIDGES_MAGIC_VALUE, "Bridgehub: magic value mismatch");
+
+    require(
+        _request.secondBridgeAddress > BRIDGEHUB_MIN_SECOND_BRIDGE_ADDRESS,
+        "Bridgehub: second bridge address too low"
+    ); // to avoid calls to precompiles
+
+    canonicalTxHash = _requestL2Transaction(
+        _request.chainId,
+        _request.secondBridgeAddress,
+        outputRequest.l2Contract,
+        _request.mintValue,
+        _request.l2Value,
+        outputRequest.l2Calldata,
+        _request.l2GasLimit,
+        _request.l2GasPerPubdataByteLimit,
+        outputRequest.factoryDeps,
+        _request.refundRecipient
+    );
+
+    IL1SharedBridge(_request.secondBridgeAddress).bridgehubConfirmL2Transaction(
+        _request.chainId,
+        outputRequest.txDataHash,
+        canonicalTxHash
+    );
 }
 
-By extracting the common logic into `_handleDeposit`, we reduce code redundancy and improve the contract's maintainability. This can also lead to gas savings due to reduced code size and fewer conditional checks.
+Similarly, the `requestL2TransactionTwoBridges` function now handles the specific logic related to the second bridge interaction and then calls the `_requestL2Transaction` internal function with the appropriate parameters.
 
-## [G-04] Optimizing the Governance Contract
+By extracting the shared logic into `_requestL2Transaction`, you avoid code duplication and reduce gas costs associated with redundant checks and function calls. This can improve the overall efficiency and maintainability of the `Bridgehub` contract.
 
-This contract manages governance operations, so optimizing it for gas efficiency is important to ensure smooth and cost-effective governance processes. Here are some potential areas for improvement:
+## [G-02] Inlining _checkPredecessorDone in Governance Contract
 
-###### General Optimizations
+**`_checkPredecessorDone`:**
 
-**1 - Cache Storage Variables:**
+This function is called within `execute` and `executeInstant`. Consider moving the check directly into those functions to avoid the overhead of an additional internal function call.
 
- - Functions like `isOperationReady` and execute access the `timestamps` mapping multiple times. Cache the relevant timestamp in a local variable to reduce storage reads.
+Here's how you can inline the `_checkPredecessorDone` function within the `execute` and `executeInstant` functions in the `Governance` contract to avoid the overhead of an additional internal function call:
 
-**2 - Use Unchecked Math:**
+**1 - Update execute function:**
 
-- In functions like `_schedule`, where overflows are unlikely due to prior checks or context, consider using unchecked blocks for arithmetic operations.
+function execute(Operation calldata _operation) external payable onlyOwnerOrSecurityCouncil {
+    bytes32 id = hashOperation(_operation);
 
-**3 - Use Custom Errors:**
+    require(_operation.predecessor == bytes32(0) || isOperationDone(_operation.predecessor), "Predecessor operation not completed");
 
-- Replace `require` statements with custom errors for specific error conditions to save gas on revert messages.
+    require(isOperationReady(id), "Operation must be ready before execution");
+
+    _execute(_operation.calls);
+
+    require(isOperationReady(id), "Operation must be ready after execution");
+
+    timestamps[id] = EXECUTED_PROPOSAL_TIMESTAMP;
+    emit OperationExecuted(id);
+}
+
+**2 - Update executeInstant function:**
+
+function executeInstant(Operation calldata _operation) external payable onlySecurityCouncil {
+    bytes32 id = hashOperation(_operation);
+
+    require(_operation.predecessor == bytes32(0) || isOperationDone(_operation.predecessor), "Predecessor operation not completed");
+
+    require(isOperationPending(id), "Operation must be pending before execution");
+
+    _execute(_operation.calls);
+
+    require(isOperationPending(id), "Operation must be pending after execution");
+
+    timestamps[id] = EXECUTED_PROPOSAL_TIMESTAMP;
+    emit OperationExecuted(id);
+}
+
+By directly incorporating the predecessor check within these functions, you eliminate the need for a separate function call, which can save gas, especially if these functions are called frequently.
+
+## [G-03] Inlining getCommittedBatchTimestamp in ValidatorTimelock Contract
+
+**`getCommittedBatchTimestamp`:**
+
+This function is called within loops in `executeBatches` and `executeBatchesSharedBridge`. Consider directly accessing the `committedBatchTimestamp` mapping within those loops instead of calling this function repeatedly. This can save gas by avoiding function call overhead.
+
+Here's how you can directly access the `committedBatchTimestamp` mapping within the `executeBatches` and `executeBatchesSharedBridge` functions to avoid the overhead of calling `getCommittedBatchTimestamp` repeatedly:
+
+**1 - Update executeBatches function:**
+
+function executeBatches(StoredBatchInfo[] calldata _newBatchesData) external onlyValidator(ERA_CHAIN_ID) {
+    uint256 delay = executionDelay; // uint32
+    unchecked {
+        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
+            // Directly access committedBatchTimestamp instead of calling getCommittedBatchTimestamp
+            uint256 commitBatchTimestamp = committedBatchTimestamp[ERA_CHAIN_ID].get(_newBatchesData[i].batchNumber);
+
+            // Note: if the `commitBatchTimestamp` is zero, that means either:
+            // * The batch was committed, but not through this contract.
+            // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
+            // We allow executing such batches.
+
+            require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
+        }
+    }
+    _propagateToZkSyncStateTransition(ERA_CHAIN_ID);
+}
+
+**2 - Update executeBatchesSharedBridge function:**
+
+function executeBatchesSharedBridge(
+    uint256 _chainId,
+    StoredBatchInfo[] calldata _newBatchesData
+) external onlyValidator(_chainId) {
+    uint256 delay = executionDelay; // uint32
+    unchecked {
+        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
+            // Directly access committedBatchTimestamp instead of calling getCommittedBatchTimestamp
+            uint256 commitBatchTimestamp = committedBatchTimestamp[_chainId].get(_newBatchesData[i].batchNumber);
+
+            // Note: if the `commitBatchTimestamp` is zero, that means either:
+            // * The batch was committed, but not through this contract.
+            // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
+            // We allow executing such batches.
+
+            require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
+        }
+    }
+    _propagateToZkSyncStateTransition(_chainId);
+}
+
+By directly accessing the mapping within the loop, you avoid the overhead of calling the `getCommittedBatchTimestamp` function repeatedly, which can save gas, especially when processing multiple batches.
+
+## [G-04] Refactoring commitBatches and commitBatchesSharedBridge in ValidatorTimelock
+
+**`commitBatches` and `commitBatchesSharedBridge`:**
+
+These functions share common logic for recording timestamps and calling `_propagateToZkSyncStateTransition`. Consider refactoring them to extract the shared logic into a separate internal function to avoid code duplication and reduce gas costs.
+
+Here's how you can refactor the `commitBatches` and `commitBatchesSharedBridge` functions in the `ValidatorTimelock` contract to extract shared logic and reduce gas costs:
+
+**1 - Create a new internal function:**
+
+function _commitBatchesInternal(
+    uint256 _chainId,
+    StoredBatchInfo calldata _lastCommittedBatchData,
+    CommitBatchInfo[] calldata _newBatchesData
+) internal {
+    unchecked {
+        // This contract is only a temporary solution, that hopefully will be disabled until 2106 year, so...
+        // It is safe to cast.
+        uint32 timestamp = uint32(block.timestamp);
+        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
+            committedBatchTimestamp[_chainId].set(_newBatchesData[i].batchNumber, timestamp);
+        }
+    }
+
+    _propagateToZkSyncStateTransition(_chainId);
+}
+
+This internal function encapsulates the common logic of recording timestamps for committed batches and calling `_propagateToZkSyncStateTransition`. It takes the `chain ID`, last committed batch data, and new batches data as parameters.
+
+**2 - Update commitBatches function:**
+
+function commitBatches(
+    StoredBatchInfo calldata _lastCommittedBatchData,
+    CommitBatchInfo[] calldata _newBatchesData
+) external onlyValidator(ERA_CHAIN_ID) {
+    // Call the internal function with the chain ID and other parameters
+    _commitBatchesInternal(ERA_CHAIN_ID, _lastCommittedBatchData, _newBatchesData);
+}
+
+## [G-05] Optimizing _encodeBlobAuxilaryOutput in ExecutorFacet
+
+**_encodeBlobAuxilaryOutput:**
+
+The function initializes an array of 32 `bytes32` values, but only uses the first two elements. Consider initializing a smaller array to avoid unnecessary memory allocation.
 
 
 
