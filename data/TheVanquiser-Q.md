@@ -17,3 +17,6 @@ function finalizeDeposit(
 ```
 this function called for ERC20 bridge, ``L1SharedBridge._getDepositL2Calldata`` called ``L2SharedBridge.finalizeDeposit`` without ether value.
 so the payable function and check of msg.value on ``finalizeDeposit`` function is useless
+
+Recommendation:
+remove payable and check of msg.value on ``finalizeDeposit`` function
