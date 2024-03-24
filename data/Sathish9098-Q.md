@@ -112,5 +112,44 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-de
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L44-L48
 
+##
+
+## [L-] For events for critical changes 
+
+This is a critical aspect of smart contract development, especially for functions that involve significant changes to the contract's operation or state. Emitting events helps in tracking the changes and is crucial for transparency and auditability.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/ValidatorTimelock.sol
+
+/// @dev Set new validator address.
+ function setStateTransitionManager(IStateTransitionManager _stateTransitionManager) external onlyOwner {
+        stateTransitionManager = _stateTransitionManager;
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L72
+
+##
+
+## [L-] Misleading comment in ``setStateTransitionManager()`` function
+
+Update the comment to accurately reflect the function's purpose. It could be like ``/// @dev Sets a new state transition manager``. The current comment suggests this function used for setting new address validator ``/// @dev Set new validator address.``
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/ValidatorTimelock.sol
+
+- /// @dev Set new validator address.
++ /// @dev Sets a new state transition manager.
+    function setStateTransitionManager(IStateTransitionManager _stateTransitionManager) external onlyOwner {
+        stateTransitionManager = _stateTransitionManager;
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L72
+
+
+
 
 
