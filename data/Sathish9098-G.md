@@ -6,6 +6,37 @@
 
 The EVM works with 32 byte words. Variables less than 32 bytes can be declared next to each other in storage and this will pack the values together into a single 32 byte storage slot (if the values combined are <= 32 bytes). If the variables packed together are retrieved together in functions we will effectively save ~2000 gas with every subsequent SLOAD for that storage slot. This is due to us incurring a Gwarmaccess (100 gas) versus a Gcoldsload (2100 gas).
 
+### [G-1.1] ``stateTransitionManager`` and ``executionDelay`` can be packed same slot : Saves ``2000 GAS`` , ``1 SLOT``
+
+If we rearrange the ``stateTransitionManager`` and ``executionDelay`` order we can save ``1 SLOT`` and ``2000 GAS`` 
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol
+
+ /// @notice Error for when an address is not a validator.
+    error ValidatorDoesNotExist(uint256 _chainId);
+
+    /// @dev The stateTransitionManager smart contract.
+    IStateTransitionManager public stateTransitionManager;
+
++   uint32 public executionDelay;
+
+    /// @dev The mapping of L2 chainId => batch number => timestamp when it was committed.
+    mapping(uint256 => LibMap.Uint32Map) internal committedBatchTimestamp;
+
+    /// @dev The address that can commit/revert/validate/execute batches.
+    mapping(uint256 _chainId => mapping(address _validator => bool)) public validators;
+
+    /// @dev The delay between committing and executing batches.
+-    uint32 public executionDelay;
+
+    constructor(address _initialOwner, uint32 _executionDelay) {
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L40-L53
+
+
+
 ### [G-1.1] ``securityCouncil`` and ``minDelay`` can be packed same Slot 
 
 A ``uint96`` variable can hold values up to ``2^96 - 1``, which is a significantly large number. Specifically, it can represent up to over ``79 billion years``. Given that this range is far beyond any practical ``delay duration`` for any process or mechanism, uint96 provides more than sufficient capacity for a ``delay timer`` in ``seconds``. So packing ``securityCouncil`` and ``minDelay`` within same slot is perfectly safe.
@@ -55,6 +86,24 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
 
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L42
+
+### ``chainId`` and ``origin`` can be packed same slot : Saves 2000 GAS 
+
+chainId (type uint256) typically doesn't use the full range of a 256-bit number since chain IDs are much smaller integers. For most practical purposes, chain IDs like Ethereum's (1), Binance Smart Chain's (56), etc., are well below 2^96 (which is over 4 billion), meaning they could be represented with a uint96 without losing information.
+
+```diff
+FILE: 2024-03-zksync/code/system-contracts/contracts/SystemContext.sol
+
+/// @notice The chainId of the network. It is set at the genesis.
+-    uint256 public chainId;
++    uint96 public chainId;
+
+    /// @notice The `tx.origin` in the current transaction.
+    /// @dev It is updated before each transaction by the bootloader
+    address public origin;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/SystemContext.sol#L26
 
 ##
 
@@ -208,6 +257,76 @@ if (!hyperbridgingEnabled[_chainId]) {
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L349-L350
 
+##
+
+## [G-1] State variables should be cached with stack variable
+
+The instances below point to the second+ access of a state variable within a function. Caching of a state variable replace each Gwarmaccess (100 gas) with a much cheaper stack read. Other less obvious fixes/optimizations include having local memory caches of state variable structs, or having local caches of state variable contracts/addresses. Most of the times this if statement will be true and we will save 100 gas at a small possibility of 3 gas loss ,
+
+### [G-]  Cache ``sharedBridge`` Storage variable to reduce redundant access
+
+sharedBridge variable implies that instead of directly accessing this storage variable multiple times within a single function or transaction (which would repeatedly read from blockchain storage), the value should be read once and stored in a local variable (memory). This local variable is then used for subsequent operations within the function. Saves ``100 GAS`` , ``1 SLOD``
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
+/Bridgehub.sol
+
+/// @notice register new chain
+    /// @notice for Eth the baseToken address is 1
+    function createNewChain(
+        uint256 _chainId,
+        address _stateTransitionManager,
+        address _baseToken,
+        uint256, //_salt
+        address _admin,
+        bytes calldata _initData
+    ) external onlyOwnerOrAdmin nonReentrant returns (uint256 chainId) {
+        require(_chainId != 0, "Bridgehub: chainId cannot be 0");
+        require(_chainId <= type(uint48).max, "Bridgehub: chainId too large");
+
+        require(
+            stateTransitionManagerIsRegistered[_stateTransitionManager],
+            "Bridgehub: state transition not registered"
+        );
+        require(tokenIsRegistered[_baseToken], "Bridgehub: token not registered");
++   address  sharedBridge_ =  address(sharedBridge) ;    
+-  require(address(sharedBridge) != address(0), "Bridgehub: weth bridge not set");
++  require(address(sharedBridge_) != address(0), "Bridgehub: weth bridge not set");
+        require(stateTransitionManager[_chainId] == address(0), "Bridgehub: chainId already registered");
+
+        stateTransitionManager[_chainId] = _stateTransitionManager;
+        baseToken[_chainId] = _baseToken;
+
+        IStateTransitionManager(_stateTransitionManager).createNewChain(
+            _chainId,
+            _baseToken,
+-            address(sharedBridge),
++            sharedBridge_,
+            _admin,
+            _initData
+        );
+
+        emit NewChain(_chainId, _stateTransitionManager, _admin);
+        return _chainId;
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L130
+
+### [G-] basePubdataSpent should be cached  : Saves ``100 GAS`` , ``1 SLOD``
+
+```diff
+FILE: 2024-03-zksync/code/system-contracts/contracts
+/SystemContext.sol
+
+function getCurrentPubdataSpent() public view returns (uint256) {
+        uint256 pubdataPublished = SystemContractHelper.getZkSyncMeta().pubdataPublished;
+        return pubdataPublished > basePubdataSpent ? pubdataPublished - basePubdataSpent : 0;
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/SystemContext.sol#L117-L120
+
 
 
 ##
@@ -258,57 +377,7 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L554-L564
 
-##
 
-## [G-]  Cache ``sharedBridge`` Storage variable to reduce redundant access
-
-sharedBridge variable implies that instead of directly accessing this storage variable multiple times within a single function or transaction (which would repeatedly read from blockchain storage), the value should be read once and stored in a local variable (memory). This local variable is then used for subsequent operations within the function. Saves ``100 GAS`` , ``1 SLOD``
-
-```diff
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
-/Bridgehub.sol
-
-/// @notice register new chain
-    /// @notice for Eth the baseToken address is 1
-    function createNewChain(
-        uint256 _chainId,
-        address _stateTransitionManager,
-        address _baseToken,
-        uint256, //_salt
-        address _admin,
-        bytes calldata _initData
-    ) external onlyOwnerOrAdmin nonReentrant returns (uint256 chainId) {
-        require(_chainId != 0, "Bridgehub: chainId cannot be 0");
-        require(_chainId <= type(uint48).max, "Bridgehub: chainId too large");
-
-        require(
-            stateTransitionManagerIsRegistered[_stateTransitionManager],
-            "Bridgehub: state transition not registered"
-        );
-        require(tokenIsRegistered[_baseToken], "Bridgehub: token not registered");
-+   address  sharedBridge_ =  address(sharedBridge) ;    
--  require(address(sharedBridge) != address(0), "Bridgehub: weth bridge not set");
-+  require(address(sharedBridge_) != address(0), "Bridgehub: weth bridge not set");
-        require(stateTransitionManager[_chainId] == address(0), "Bridgehub: chainId already registered");
-
-        stateTransitionManager[_chainId] = _stateTransitionManager;
-        baseToken[_chainId] = _baseToken;
-
-        IStateTransitionManager(_stateTransitionManager).createNewChain(
-            _chainId,
-            _baseToken,
--            address(sharedBridge),
-+            sharedBridge_,
-            _admin,
-            _initData
-        );
-
-        emit NewChain(_chainId, _stateTransitionManager, _admin);
-        return _chainId;
-    }
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L130
 
 ## [G-] Avoid updating storage when the value hasn't changed
 
@@ -333,7 +402,163 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-de
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L44-L55
 
+##
 
+## [G-] Don't emit state variables when stack variable available 
+
+Replace s.totalBatchesCommitted with _newLastBatch in the emit statement to use the stack variable instead of the state variable. This adjustment conserves gas as reading from the stack is cheaper than accessing state variables. 
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol
+
+ s.totalBatchesCommitted = _newLastBatch;
+
+        // Reset the batch number of the executed system contracts upgrade transaction if the batch
+        // where the system contracts upgrade was committed is among the reverted batches.
+        if (s.l2SystemContractsUpgradeBatchNumber > _newLastBatch) {
+            delete s.l2SystemContractsUpgradeBatchNumber;
+        }
+
+-        emit BlocksRevert(s.totalBatchesCommitted, s.totalBatchesVerified, s.totalBatchesExecuted);
++        emit BlocksRevert(_newLastBatch, s.totalBatchesVerified, s.totalBatchesExecuted);
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol#L496
+
+##
+
+## [G-] Using storage instead of memory for structs/arrays saves gas
+
+When fetching data from a storage location, assigning the data to a memory variable causes all fields of the struct/array to be read from storage, which incurs a Gcoldsload (2100 gas) for each field of the struct/array. If the fields are read from the new memory variable, they incur an additional MLOAD rather than a cheap stack read. Instead of declearing the variable with the memory keyword, declaring the variable with the storage keyword and caching any fields that need to be re-read in stack variables, will be much cheaper, only incuring the Gcoldsload for the fields actually read. The only time it makes sense to read the whole struct/array into a memory variable, is if the full struct/array is being returned by the function, is being passed to a function that requires memory, or if the array/struct is being read from another memory array/struct.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
+/Diamond.sol
+
+140: SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+160: SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+180:  SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/libraries/Diamond.sol#L140
+
+##
+
+## [G-] Don't declare the variables inside the loop
+
+The variables selector and oldFacet are declared outside of the for-loop to avoid redundant declarations on each iteration. This optimization reduces the cost associated with variable declaration and memory allocation during the loop execution.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
+/Diamond.sol
+
+137: uint256 selectorsLength = _selectors.length;
+        for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
+            bytes4 selector = _selectors[i];
+            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+            require(oldFacet.facetAddress == address(0), "J"); // facet for this selector already exists
+
+            _addOneFunction(_facet, selector, _isFacetFreezable);
+        }
+
+158: for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
+            bytes4 selector = _selectors[i];
+            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+            require(oldFacet.facetAddress != address(0), "L"); // it is impossible to replace the facet with zero address
+
+
+178:  for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
+            bytes4 selector = _selectors[i];
+            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
+            require(oldFacet.facetAddress != address(0), "a2"); // Can't delete a non-existent facet
+
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/libraries/Diamond.sol#L137-L144
+
+##
+
+## [G-] Optimizing gas consumption by utilizing ``calldata`` for read-Only external function parameters
+
+calldata must be used when declaring an external function's dynamic parameters
+
+When a function with a memory array is called externally, the abi.decode ()  step has to use a for-loop to copy each index of the calldata to the memory index. Each iteration of this for-loop costs at least 60 gas (i.e. 60 * <mem_array>.length). Using calldata directly, obliviates the need for such a loop in the contract code and runtime execution. 
+
+```solidity
+
+```
+
+##
+
+## [G-] Consolidating multiple mappings into a single struct mapping for gas Optimization
+
+Saves a storage slot for the mapping. Depending on the circumstances and sizes of types, can avoid a Gsset (20000 gas) per mapping combined. Reads and subsequent writes can also be cheaper when a function requires both values and they both fit in the same storage slot. Finally, if both fields are accessed in the same function, can save ~42 gas per access due to not having to recalculate the key’s keccak256 hash (Gkeccak256 - 30 gas) and that calculation’s associated stack operations.
+
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
++ struct BridgeInfo {
++    address l2Bridge; // Address of the bridge proxy
++    bool hyperbridgingEnabled; // Indicates if hyperbridging is enabled for the chain
++ }
+
++ mapping(uint256 => BridgeInfo) public bridgeInfos;
+
+- 48: mapping(uint256 chainId => address l2Bridge) public override l2BridgeAddress;
+
+- 60: /// @dev Indicates whether the hyperbridging is enabled for a given chain.
+- 61:    mapping(uint256 chainId => bool enabled) internal hyperbridgingEnabled;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L48
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
+/Bridgehub.sol
+
+/// @notice chainID => StateTransitionManager contract address, storing StateTransitionManager
+    mapping(uint256 _chainId => address) public stateTransitionManager;
+
+    /// @notice chainID => baseToken contract address, storing baseToken
+    mapping(uint256 _chainId => address) public baseToken;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L25-L29
+
+##
+
+## [G-] Consolidating multiple event emissions into a single event : Saves ``375 GAS``
+
+Emitting an event has a fixed gas cost plus a variable cost based on the size of the data emitted. The fixed cost is mainly due to the use of the LOG operation in the Ethereum Virtual Machine (EVM), which is around 375 gas for a LOG operation itself (LOG0, emitting a log with no topics).
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/governance
+/Governance.sol
+
++ event ConfigurationChanged(address indexed oldSecurityCouncil, address indexed newSecurityCouncil, uint oldMinDelay, uint newMinDelay);
+
+
+
+  securityCouncil = _securityCouncil;
+-        emit ChangeSecurityCouncil(address(0), _securityCouncil);
+
+        minDelay = _minDelay;
+-        emit ChangeMinDelay(0, _minDelay);
+
++  emit ConfigurationChanged(address(0), _securityCouncil, 0, _minDelay);
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L46-L50
+
+
+
+##
+
+[G-] The result of function calls should be cached rather than re-calling the function 
+
+The instances below point to the second+ call of the function within a single function
 
 
 
