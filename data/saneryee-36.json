@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "saneryee",
+  "risk": "3",
+  "title": "An attacker could potentially claim another person's refund or apply for an excessive refund through the `claimFailedDepositLegacyErc20Bridge`.",
+  "issueId": 36,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/36"
+}
