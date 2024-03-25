@@ -105,6 +105,7 @@ FILE: 2024-03-zksync/code/system-contracts/contracts/SystemContext.sol
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/SystemContext.sol#L26
 
+
 ##
 
 ## [G-1] l2BridgeAddress[_chainId] , l2BridgeAddress[ERA_CHAIN_ID] , ``chainBalance[_chainId][_l1Token]``  mappings can be cached 
@@ -494,6 +495,18 @@ When a function with a memory array is called externally, the abi.decode ()  ste
 
 Saves a storage slot for the mapping. Depending on the circumstances and sizes of types, can avoid a Gsset (20000 gas) per mapping combined. Reads and subsequent writes can also be cheaper when a function requires both values and they both fit in the same storage slot. Finally, if both fields are accessed in the same function, can save ~42 gas per access due to not having to recalculate the key’s keccak256 hash (Gkeccak256 - 30 gas) and that calculation’s associated stack operations.
 
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps
+/ZkSyncStateTransitionStorage.sol
+
+85: /// @dev Stored hashed StoredBatch for batch number
+86:    mapping(uint256 batchNumber => bytes32 batchHash) storedBatchHashes;
+87:    /// @dev Stored root hashes of L2 -> L1 logs
+88:    mapping(uint256 batchNumber => bytes32 l2LogsRootHash) l2LogsRootHashes;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/ZkSyncStateTransitionStorage.sol#L85-L88
+
 
 ```diff
 FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
@@ -551,6 +564,297 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/governance
 
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L46-L50
+
+##
+
+## [G-] Use constants instead of type(uintX).max
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
+/TransactionValidator.sol
+
+49: require(_transaction.to <= type(uint160).max, "ub");
+55: require(_transaction.reserved[1] <= type(uint160).max, "uf");
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/libraries/TransactionValidator.sol#L49
+
+##
+
+## [G-] via updating storage while emitting events
+
+Via doing so ``21gas`` can be saved with each emit
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/StateTransitionManager.sol
+
+/// @inheritdoc IStateTransitionManager
+    function setPendingAdmin(address _newPendingAdmin) external onlyOwnerOrAdmin {
+-        // Save previous value into the stack to put it into the event later
+-        address oldPendingAdmin = pendingAdmin;
+-        // Change pending admin
+-        pendingAdmin = _newPendingAdmin;
+-        emit NewPendingAdmin(oldPendingAdmin, _newPendingAdmin);
++        emit NewPendingAdmin(pendingAdmin , pendingAdmin = _newPendingAdmin);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L109-L116
+
+```diff
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+
+66: /// @inheritdoc IAdmin
+    function changeFeeParams(FeeParams calldata _newFeeParams) external onlyAdminOrStateTransitionManager {
+        // Double checking that the new fee params are valid, i.e.
+        // the maximal pubdata per batch is not less than the maximal pubdata per priority transaction.
+        require(_newFeeParams.maxPubdataPerBatch >= _newFeeParams.priorityTxMaxPubdata, "n6");
+
+-        FeeParams memory oldFeeParams = s.feeParams;
+-        s.feeParams = _newFeeParams;
+
+-        emit NewFeeParams(oldFeeParams, _newFeeParams);
++        emit NewFeeParams(s.feeParams, s.feeParams = _newFeeParams);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L66-L76
+
+##
+
+## [G-] Use assembly to write address/contract type storage values
+
+Using assembly { sstore(state.slot, addr) instead of state = addr can save gas.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1ERC20Bridge.sol
+
+36: address public l2Bridge;
+
+39: address public l2TokenBeacon;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L36
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
+/Bridgehub.sol
+
+32: address public admin;
+
+35: address private pendingAdmin;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L32-L35
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/StateTransitionManager.sol
+
+39: address public genesisUpgrade;
+
+45: address public validatorTimelock;
+
+51: address public admin;
+
+54: address private pendingAdmin;
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L50-L55
+
+##
+
+## [G-] Use assembly to validate ``msg.sender``
+
+In this updated version of the contract, we use assembly to load the msg.sender value directly, which is more gas-efficient than using the msg.sender global variable. By loading the msg.sender value into a local variable, we save some gas compared to the standard msg.sender usage.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1ERC20Bridge.sol
+
+64: require(msg.sender == address(sharedBridge), "Not shared bridge");
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L64
+
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/governance
+/Governance.sol
+
+59: require(msg.sender == address(this), "Only governance contract itself is allowed to call this function");
+
+65: require(msg.sender == securityCouncil, "Only security council is allowed to call this function");
+
+71:   require(
+            msg.sender == owner() || msg.sender == securityCouncil,
+            "Only the owner and security council are allowed to call this function"
+        );
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L59
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/StateTransitionManager.sol
+
+64: require(msg.sender == bridgehub, "StateTransition: only bridgehub");
+
+70: require(msg.sender == admin || msg.sender == owner(), "Bridgehub: not owner or admin");
+
+121: require(msg.sender == currentPendingAdmin, "n42"); // Only proposed by current admin address can claim the admin rights
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L64
+
+##
+
+## [G-] Assigning state variables directly with named struct constructors wastes gas
+
+Using named arguments for struct means that the compiler needs to organize the fields in memory before doing the assignment, which wastes gas. Set each field directly in storage (use dot-notation), or use the unnamed version of the constructor. Using named arguments for struct constructors can lead to additional gas costs compared to other methods of struct initialization. This is due to the way the Solidity compiler handles memory and storage, especially with respect to struct assignment. 
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+430: MessageParams memory messageParams = MessageParams({
+            l2BatchNumber: _l2BatchNumber,
+            l2MessageIndex: _l2MessageIndex,
+            l2TxNumberInBatch: _l2TxNumberInBatch
+        });
+
+
+584: L2TransactionRequestDirect memory request = L2TransactionRequestDirect({
+                chainId: ERA_CHAIN_ID,
+                l2Contract: l2BridgeAddress[ERA_CHAIN_ID],
+                mintValue: msg.value, // l2 gas + l2 msg.Value the bridgehub will withdraw the mintValue from the base token bridge for gas
+                l2Value: 0, // L2 msg.value, this contract doesn't support base token deposits or wrapping functionality, for direct deposits use bridgehub
+                l2Calldata: l2TxCalldata,
+                l2GasLimit: _l2TxGasLimit,
+                l2GasPerPubdataByteLimit: _l2TxGasPerPubdataByte,
+                factoryDeps: new bytes[](0),
+                refundRecipient: refundRecipient
+            });
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L430-L434
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/StateTransitionManager.sol
+
+182: L2CanonicalTransaction memory l2ProtocolUpgradeTx = L2CanonicalTransaction({
+            txType: SYSTEM_UPGRADE_L2_TX_TYPE,
+            from: uint256(uint160(L2_FORCE_DEPLOYER_ADDR)),
+            to: uint256(uint160(L2_SYSTEM_CONTEXT_SYSTEM_CONTRACT_ADDR)),
+            gasLimit: $(PRIORITY_TX_MAX_GAS_LIMIT),
+            gasPerPubdataByteLimit: REQUIRED_L2_GAS_PRICE_PER_PUBDATA,
+            maxFeePerGas: uint256(0),
+            maxPriorityFeePerGas: uint256(0),
+            paymaster: uint256(0),
+            // Note, that the priority operation id is used as "nonce" for L1->L2 transactions
+            nonce: protocolVersion,
+            value: 0,
+            reserved: [uint256(0), 0, 0, 0],
+            data: systemContextCalldata,
+            signature: new bytes(0),
+            factoryDeps: uintEmptyArray,
+            paymasterInput: new bytes(0),
+            reservedDynamic: new bytes(0)
+        });
+
+202: ProposedUpgrade memory proposedUpgrade = ProposedUpgrade({
+            l2ProtocolUpgradeTx: l2ProtocolUpgradeTx,
+            factoryDeps: bytesEmptyArray,
+            bootloaderHash: bytes32(0),
+            defaultAccountHash: bytes32(0),
+            verifier: address(0),
+            verifierParams: VerifierParams({
+                recursionNodeLevelVkHash: bytes32(0),
+                recursionLeafLevelVkHash: bytes32(0),
+                recursionCircuitsSetVksHash: bytes32(0)
+            }),
+            l1ContractsUpgradeCalldata: new bytes(0),
+            postUpgradeCalldata: new bytes(0),
+            upgradeTimestamp: 0,
+            newProtocolVersion: protocolVersion
+        });
+
+220: Diamond.DiamondCutData memory cutData = Diamond.DiamondCutData({
+            facetCuts: emptyArray,
+            initAddress: genesisUpgrade,
+            initCalldata: abi.encodeCall(IDefaultUpgrade.upgrade, (proposedUpgrade))
+        });
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L182
+
+##
+
+## [G-] Consider using alternatives to OpenZeppelin
+
+OpenZeppelin is a great and popular smart contract library, but there are other alternatives that are worth considering. These alternatives offer better gas efficiency and have been tested and recommended by developers.
+
+Two examples of such alternatives are [Solmate](https://github.com/transmissions11/solmate) and [Solady](https://github.com/Vectorized/solady).
+
+Solmate is a library that provides a number of gas-efficient implementations of common smart contract patterns. Solady is another gas-efficient library that places a strong emphasis on using assembly.
+
+```
+FILE: package.json
+
+ "@openzeppelin/contracts": "4.9.5",
+    "@openzeppelin/contracts-upgradeable": "4.9.5",
+
+```
+
+##
+
+## [G-] Using assembly to revert with an error message
+
+When reverting in solidity code, it is common practice to use a require or revert statement to revert execution with an error message. This can in most cases be further optimized by using assembly to revert with the error message. Saves around 300 GAS per message 
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1ERC20Bridge.sol
+
+64: require(msg.sender == address(sharedBridge), "Not shared bridge");
+66: require(amount == _amount, "Incorrect amount");
+141: require(_amount != 0, "0T"); // empty deposit
+143: require(amount == _amount, "3T"); // The token has non-standard transfer logic
+186: require(amount != 0, "2T"); // empty deposit
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L64
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+69: require(msg.sender == address(bridgehub), "ShB not BH");
+75: require(
+            msg.sender == address(bridgehub) || (_chainId == ERA_CHAIN_ID && msg.sender == ERA_DIAMOND_PROXY),
+            "L1SharedBridge: not bridgehub or era chain"
+        );
+84: require(msg.sender == address(legacyBridge), "ShB not legacy bridge");
+
+108: require(_owner != address(0), "ShB owner 0");
+129: require(amount > 0, "ShB: 0 amount to transfer");
+132: require(balanceAfter - balanceBefore == amount, "ShB: wrong amount transferred");
+138: require(bridgehub.getStateTransition(_chainId) == msg.sender, "receiveEth not state transition");
+155: require(msg.value == _amount, "L1SharedBridge: msg.value not equal to amount");
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L69C9-L69C65
+
+##
+
+## [G-1] Test if a number is even or odd by checking the last bit instead of using a modulo operator
+
+The conventional way to check if a number is even or odd is to do x % 2 == 0 where x is the number in question. You can instead check if x & uint256(1) == 0. where x is assumed to be a uint256. Bitwise and is cheaper than the modulo op code. In binary, the rightmost bit represents "1" whereas all the bits to the are multiples of 2, which are even. Adding "1" to an even number causes it to be odd.
+
+
 
 
 
