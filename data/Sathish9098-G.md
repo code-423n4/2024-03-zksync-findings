@@ -850,9 +850,46 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-1] Test if a number is even or odd by checking the last bit instead of using a modulo operator
+## [G-1] Invert if-else statements that have a negation
 
-The conventional way to check if a number is even or odd is to do x % 2 == 0 where x is the number in question. You can instead check if x & uint256(1) == 0. where x is assumed to be a uint256. Bitwise and is cheaper than the modulo op code. In binary, the rightmost bit represents "1" whereas all the bits to the are multiples of 2, which are even. Adding "1" to an even number causes it to be odd.
+ In theory, the extra ! increases the computational cost. Also should benchmark both methods because the compiler is can sometimes optimize this.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+164: if (!hyperbridgingEnabled[_chainId]) {
+
+211: if (!hyperbridgingEnabled[_chainId]) {
+
+347: if (!hyperbridgingEnabled[_chainId]) {
+
+437: if (!hyperbridgingEnabled[_chainId]) {
+
+567: if (!hyperbridgingEnabled[ERA_CHAIN_ID]) {
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L164
+
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/governance
+/Governance.sol
+
+227: if (!success) {
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L227
+
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/ValidatorTimelock.sol
+
+88: if (!validators[_chainId][_validator]) {
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L88
 
 
 
