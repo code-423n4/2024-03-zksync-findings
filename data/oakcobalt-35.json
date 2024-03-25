@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "oakcobalt",
+  "risk": "2",
+  "title": "User might not be able to withdraw WETH/ETH on L1 with legacy l2Batchnumber, resulting in ETH permanently locked in L1SharedBridge.sol",
+  "issueId": 35,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/35"
+}
