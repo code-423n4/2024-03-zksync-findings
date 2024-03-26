@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "oakcobalt",
+  "risk": "2",
+  "title": "Incorrect unsafePackPrecompileParams in P256Verify.yul might result in invalid return value",
+  "issueId": 59,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/59"
+}
