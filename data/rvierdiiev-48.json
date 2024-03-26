@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "rvierdiiev",
+  "risk": "3",
+  "title": "StateTransitionManager.unfreezeChain calls wrong function",
+  "issueId": 48,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/48"
+}
