@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "lsaudit",
+  "risk": "2",
+  "title": "`TransactionHelper.sol` violates EIP-712",
+  "issueId": 43,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/43"
+}
