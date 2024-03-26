@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "oakcobalt",
+  "risk": "2",
+  "title": "L1SharedBridge's restriction on Weth deposit can be bypassed",
+  "issueId": 51,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/51"
+}
