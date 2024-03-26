@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "lsaudit",
+  "risk": "2",
+  "title": "`getCanonicalL1TxHash()` may return the same hash for different transactions",
+  "issueId": 44,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/44"
+}
