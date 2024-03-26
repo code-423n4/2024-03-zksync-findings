@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "lsaudit",
+  "risk": "2",
+  "title": "`depositAmount` is not properly updated in `L1ERC20Bridge.deposit()`",
+  "issueId": 37,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/37"
+}
