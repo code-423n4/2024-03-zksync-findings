@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "lsaudit",
+  "risk": "2",
+  "title": "User will pay more gas than defined in Ethereum Yellow Paper",
+  "issueId": 45,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/45"
+}
