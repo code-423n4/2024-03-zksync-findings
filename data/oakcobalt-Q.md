@@ -31,7 +31,7 @@ The l2batchNumber of the user deposit might equal (or exceed) `eraFirstPostUpgra
 
 In the above case, if the user's deposit fails on L2 for any reason. They are not able to claim the deposit on L1 post-migration. 
 
-This is because the new L1ERC20Brdige.sol will pass the claimFailedDeposit control flow to L1SharedBridge::`claimFailedDeposit`. In `_claimFailedDeposit()`, `_isEraLegacyWithdrawal` will evaluate to false (if `_l2BatchNumber` >= `eraFirstPostUpgradeBatch`), this will cause `bool notCheckedInLegacyBridgeOrWeCanCheckDeposit` evaluates to true. In the if-body, `depositHappened[_chainId][_l2TxHash]` will be checked. However, because the user made the deposit in the old L1ERC20Bridge.sol (before the last step of Migration), there is no record of this deposit in L1SharedBridge. User's `claimFailedDeposit()` will revert. The user cannot claim.
+This is because the new L1ERC20Brdige.sol will pass the claimFailedDeposit control flow to L1SharedBridge::`claimFailedDeposit`. In `_claimFailedDeposit()`, `_isEraLegacyWithdrawal` will evaluate to false (if `_l2BatchNumber` >= `eraFirstPostUpgradeBatch`), this will cause `bool notCheckedInLegacyBridgeOrWeCanCheckDeposit` evaluates to true. In the if-body, `depositHappened[_chainId][_l2TxHash]` will be checked. However, because the user made the deposit in the old L1ERC20Bridge.sol (before [the last step of Migration](https://github.com/code-423n4/2024-03-zksync/blob/main/docs/Protocol%20Section/Migration%20process.md#introduction)), there is no record of this deposit in L1SharedBridge. User's `claimFailedDeposit()` will revert. The user cannot claim.
 ```solidity
 //code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol
     function _claimFailedDeposit(
@@ -77,7 +77,7 @@ Edge case above will result in claiming failed deposit impossible on L1.
 Recommendations:
 In L1SharedBridge::`_claimFaiedDeposit`, instead of `bool notCheckedInLegacyBridgeOrWeCanCheckDeposit`, consider refactoring the if control flow based on `bool _checkedInLegacyBridge`. 
 (1) if `_checkedInLegacyBridge` is true, `depositAmount` record is already checked and deleted in L1ERC20Bridge, which means deposit is made through L1ERC20Bridge (either oldERC20 bridge or newERC20 bridge). We only need to delete `depositHappened[_chainId][_l2TxHash]` to prevent double claiming.
-(2) if `_checkedInLegacyBridge` is false. Either deposit is made through new L1ERC20Bridge or made directly through L1SharedBridge. We check `depositHappened[_chainId][_l2TxHash]`  first, a) if dataHash matches, we confirm and delete `depositHappened[_chainId][_l2TxHash]` to prevent double claiming. b) if dataHash doesn't match or doesn't exist, we reject the claim. Either the deposit is made with old L1ERC20Bridge, which can be claimed from new L1ERC20Bridge (same as (1) flow), OR the deposit doesn't exist. 
+(2) if `_checkedInLegacyBridge` is false. Either deposit is made through new L1ERC20Bridge or made directly through L1SharedBridge. We check `depositHappened[_chainId][_l2TxHash]`  first, a) if dataHash matches, we confirm and delete `depositHappened[_chainId][_l2TxHash]` to prevent double claiming. b) if dataHash doesn't match or doesn't exist, we reject the claim. Either the deposit is made with old L1ERC20Bridge, which can be claimed from new L1ERC20Bridge (same as (1) flow), Or deposit already claimed, OR the deposit doesn't exist. 
 
 
 
