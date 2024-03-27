@@ -133,6 +133,55 @@ In some instances, resetting admin-controlled parameters lacks checks to ensure 
 Recommendations:
 Consider adding if-condition to only overwrite state parameter when the new value differs from the current value.
 
+### Low-04 Remove code that is intended for only testing purpose (Not included in bot report)
+**Instances(1)**
+The code below is intended only for testing purposes. Consider removing code that is only intended for testing.
 
+```solidity
+//code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+    function initialize(
+        StateTransitionManagerInitializeData calldata _initializeData
+    ) external reentrancyGuardInitializer {
+...
+        // While this does not provide a protection in the production, it is needed for local testing
+        // Length of the L2Log encoding should not be equal to the length of other L2Logs' tree nodes preimages
+|>      assert(L2_TO_L1_LOG_SERIALIZE_SIZE != 2 * 32);
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L106)
+
+Recommendations:
+Removing code intended only for testing.
+
+### Low-05 State transition cannot be `unfreeze` by StateTransitionManager after `freeze` due to an error.
+**Instances(1)**
+A state transition (ST)'s `freezeDiamond()` or `unfreezeDiamond` is intended to be called by either StateTransitionManger or the admin of the state transition. However, there is an error in `unfreezeChain` on StateTransitionManager.sol that will prevent StateTransitionManger from unfreezing a chain when needed.
+
+```solidity
+//code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+    function unfreezeChain(uint256 _chainId) external onlyOwner {
+          //@audit this should be `unfreezeDiamond()`. This error prevents StateTransitionManager from freezing a chain(ST) when needed.
+|>        IZkSyncStateTransition(stateTransition[_chainId]).freezeDiamond();
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L166)
+
+A state transition(ST) can be malicious. The hyperchain implementation is based on the assumption that StateTransitionManager(STM) is [the main point of trust](https://github.com/code-423n4/2024-03-zksync/blob/main/docs/Smart%20contract%20Section/L1%20ecosystem%20contracts.md#state-transition-manager-stm). This error prevents STM to exercise key control over ST to unfreeze an ST. If the ST admin is malicious and intends to freeze the chain for longer, STM won't be able to exercise intended control of the malicious ST.
+
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+      //@audit Due to error in StateTransitionManger, only ST admin can unfreeze the chain
+|>    function unfreezeDiamond() external onlyAdminOrStateTransitionManager {
+        Diamond.DiamondStorage storage diamondStorage = Diamond
+            .getDiamondStorage();
+        require(diamondStorage.isFrozen, "a7"); // diamond proxy is not frozen
+        diamondStorage.isFrozen = false;
+        emit Unfreeze();
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L143) 
+
+Recommendations:
+In `unfreezeChain`, change to call `unfreezeDiamond()`.
 
 
