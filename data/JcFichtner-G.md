@@ -1,288 +1,294 @@
-## [G-01] Refactoring requestL2TransactionDirect and requestL2TransactionTwoBridges in Bridgehub
+## [G-01] CONSTANT STATE VARIABLES
 
-**`requestL2TransactionDirect` and `requestL2TransactionTwoBridges`:**
+The contract has defined state variables whose values are never modified throughout the contract.
 
-These functions share common logic for interacting with the shared bridge and state transition manager. Consider refactoring them to extract the shared logic into a separate internal function to avoid code duplication and reduce gas costs.
+The variables whose values never change should be marked as `constant` to save gas.
 
-Here's how you can refactor the `requestL2TransactionDirect` and `requestL2TransactionTwoBridges` functions in the `Bridgehub` contract to extract shared logic and reduce gas costs:
+**INSTANCES:** 2
 
-**1 - Create a new internal function:**
+> ZkSyncStateTransitionStorage internal s
 
-function _requestL2Transaction(
-    uint256 _chainId,
-    address _sender,
-    address _l2Contract,
-    uint256 _mintValue,
-    uint256 _l2Value,
-    bytes calldata _l2Calldata,
-    uint256 _l2GasLimit,
-    uint256 _l2GasPerPubdataByteLimit,
-    bytes[] calldata _factoryDeps,
-    address _refundRecipient
-) internal returns (bytes32 canonicalTxHash) {
-    address stateTransition = getStateTransition(_chainId);
-    address refundRecipient = _actualRefundRecipient(_refundRecipient);
+https://github.com//code-423n4/2024-03zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/ZkSyncStateTransitionBase.sol#L12-L12
 
-    canonicalTxHash = IZkSyncStateTransition(stateTransition).bridgehubRequestL2Transaction(
-        BridgehubL2TransactionRequest({
-            sender: _sender,
-            contractL2: _l2Contract,
-            mintValue: _mintValue,
-            l2Value: _l2Value,
-            l2Calldata: _l2Calldata,
-            l2GasLimit: _l2GasLimit,
-            l2GasPerPubdataByteLimit: _l2GasPerPubdataByteLimit,
-            factoryDeps: _factoryDeps,
-            refundRecipient: refundRecipient
-        })
-    );
+> VirtualBlockUpgradeInfo internal virtualBlockUpgradeInfo;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/SystemContext.sol#L80-L80
+
+## [G-02] UNUSED NAMED RETURNS
+
+Using both `named returns` and a return statement isn't necessary. Removing unused `named return` variables can reduce gas usage and improve code clarity.
+
+**INSTANCES:** 1
+
+> function getDeploymentNonce(address _address) external view returns (uint256 deploymentNonce) {
+uint256 addressAsKey = uint256(uint160(_address));
+(deploymentNonce, ) = _splitRawNonce(rawNonces[addressAsKey]);
+return deploymentNonce;
 }
 
-This internal function encapsulates the common logic of interacting with the shared bridge and state transition manager. It takes all the necessary parameters and returns the canonical transaction hash.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/NonceHolder.sol#L125-L130
 
-**2 - Update `requestL2TransactionDirect`:**
+## [G-03] BYTES CONSTANT MORE EFFICIENT THAN STRING LITERAL
 
-function requestL2TransactionDirect(
-    L2TransactionRequestDirect calldata _request
-) external payable override nonReentrant returns (bytes32 canonicalTxHash) {
-    {
-        address token = baseToken[_request.chainId];
-        if (token == ETH_TOKEN_ADDRESS) {
-            require(msg.value == _request.mintValue, "Bridgehub: msg.value mismatch 1");
-        } else {
-            require(msg.value == 0, "Bridgehub: non-eth bridge with msg.value");
-        }
+The contract was found to be using `getName` string constant. This can be optimized by using `bytes32` constant to save gas.
 
-        sharedBridge.bridgehubDepositBaseToken{value: msg.value}(
-            _request.chainId,
-            msg.sender,
-            token,
-            _request.mintValue
-        );
-    }
+Unless explicitly required, if the string is lesser than `32 bytes`, it is recommended to use `bytes32` constant instead of a string constant as it’ll save some gas.
 
-    canonicalTxHash = _requestL2Transaction(
-        _request.chainId,
-        msg.sender,
-        _request.l2Contract,
-        _request.mintValue,
-        _request.l2Value,
-        _request.l2Calldata,
-        _request.l2GasLimit,
-        _request.l2GasPerPubdataByteLimit,
-        _request.factoryDeps,
-        _request.refundRecipient
-    );
-}
+**INSTANCES:** 5
 
-The `requestL2TransactionDirect` function now only handles the specific logic related to depositing base tokens and then calls the `_requestL2Transaction` internal function with the appropriate parameters.
+> string public constant override getName = "GettersFacet";
 
-**3 - Update requestL2TransactionTwoBridges:**
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Getters.sol#L25-L25
 
-function requestL2TransactionTwoBridges(
-    L2TransactionRequestTwoBridgesOuter calldata _request
-) external payable override nonReentrant returns (bytes32 canonicalTxHash) {
-    {
-        address token = baseToken[_request.chainId];
-        uint256 baseTokenMsgValue;
-        if (token == ETH_TOKEN_ADDRESS) {
-            require(
-                msg.value == _request.mintValue + _request.secondBridgeValue,
-                "Bridgehub: msg.value mismatch 2"
-            );
-            baseTokenMsgValue = _request.mintValue;
-        } else {
-            require(msg.value == _request.secondBridgeValue, "Bridgehub: msg.value mismatch 3");
-            baseTokenMsgValue = 0;
-        }
-        sharedBridge.bridgehubDepositBaseToken{value: baseTokenMsgValue}(
-            _request.chainId,
-            msg.sender,
-            token,
-            _request.mintValue
-        );
-    }
+> string public constant override getName = "ValidatorTimelock";
 
-    L2TransactionRequestTwoBridgesInner memory outputRequest = IL1SharedBridge(_request.secondBridgeAddress)
-        .bridgehubDeposit{value: _request.secondBridgeValue}(
-        _request.chainId,
-        msg.sender,
-        _request.l2Value,
-        _request.secondBridgeCalldata
-    );
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L26-L26
 
-    require(outputRequest.magicValue == TWO_BRIDGES_MAGIC_VALUE, "Bridgehub: magic value mismatch");
+>  string public constant override getName = "AdminFacet";
 
-    require(
-        _request.secondBridgeAddress > BRIDGEHUB_MIN_SECOND_BRIDGE_ADDRESS,
-        "Bridgehub: second bridge address too low"
-    ); // to avoid calls to precompiles
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L20-L20
 
-    canonicalTxHash = _requestL2Transaction(
-        _request.chainId,
-        _request.secondBridgeAddress,
-        outputRequest.l2Contract,
-        _request.mintValue,
-        _request.l2Value,
-        outputRequest.l2Calldata,
-        _request.l2GasLimit,
-        _request.l2GasPerPubdataByteLimit,
-        outputRequest.factoryDeps,
-        _request.refundRecipient
-    );
+> string public constant override getName = "ExecutorFacet";
 
-    IL1SharedBridge(_request.secondBridgeAddress).bridgehubConfirmL2Transaction(
-        _request.chainId,
-        outputRequest.txDataHash,
-        canonicalTxHash
-    );
-}
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol#L27-L27
 
-Similarly, the `requestL2TransactionTwoBridges` function now handles the specific logic related to the second bridge interaction and then calls the `_requestL2Transaction` internal function with the appropriate parameters.
+> string public constant override getName = "MailboxFacet";
 
-By extracting the shared logic into `_requestL2Transaction`, you avoid code duplication and reduce gas costs associated with redundant checks and function calls. This can improve the overall efficiency and maintainability of the `Bridgehub` contract.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L35-L35
 
-## [G-02] Inlining _checkPredecessorDone in Governance Contract
+## [G-04] CODE OPTIMIZATION BY USING MAX AND MIN
 
-**`_checkPredecessorDone`:**
+The contract was using the expression `2**N` to calculate the maximum storage capacity of the data type. This both lacks readability and costs more gas.
 
-This function is called within `execute` and `executeInstant`. Consider moving the check directly into those functions to avoid the overhead of an additional internal function call.
+`2**N` can be replaced by `type(uintN).max` or `type(uintN).min`, which is more readable and will also save some gas.
 
-Here's how you can inline the `_checkPredecessorDone` function within the `execute` and `executeInstant` functions in the `Governance` contract to avoid the overhead of an additional internal function call:
+**INSTANCES:** 3
 
-**1 - Update execute function:**
+The contract is using the expression `2**16` to calculate the maximum storage capacity of the data type.
 
-function execute(Operation calldata _operation) external payable onlyOwnerOrSecurityCouncil {
-    bytes32 id = hashOperation(_operation);
+replaced by `type(uint16).max`, or `type(uint16).min`.
 
-    require(_operation.predecessor == bytes32(0) || isOperationDone(_operation.predecessor), "Predecessor operation not completed");
+> require(bytecodeLenInWords < 2 ** 16, "pp");
 
-    require(isOperationReady(id), "Operation must be ready before execution");
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/common/libraries/L2ContractHelper.sol#L26-L26
 
-    _execute(_operation.calls);
+> uint256 private constant DEPLOY_NONCE_MULTIPLIER = 2 ** 128;
 
-    require(isOperationReady(id), "Operation must be ready after execution");
+The contract is using the expression `2**128` to calculate the maximum storage capacity of the data type.
 
-    timestamps[id] = EXECUTED_PROPOSAL_TIMESTAMP;
-    emit OperationExecuted(id);
-}
+`2**128` can be replaced by `type(uint128).max` or `type(uint128).min`.
 
-**2 - Update executeInstant function:**
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/NonceHolder.sol#L28-L28
 
-function executeInstant(Operation calldata _operation) external payable onlySecurityCouncil {
-    bytes32 id = hashOperation(_operation);
+> uint256 private constant MAXIMAL_MIN_NONCE_INCREMENT = 2 ** 32;
 
-    require(_operation.predecessor == bytes32(0) || isOperationDone(_operation.predecessor), "Predecessor operation not completed");
+The contract was using the expression `2**32` to calculate the maximum storage capacity of the data type. 
 
-    require(isOperationPending(id), "Operation must be pending before execution");
+`2**32` can be replaced by `type(uint32).max` or type(uint32).min.
 
-    _execute(_operation.calls);
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/NonceHolder.sol#L31-L31
 
-    require(isOperationPending(id), "Operation must be pending after execution");
+## [G-05] DEFINE CONSTRUCTOR AS PAYABLE
 
-    timestamps[id] = EXECUTED_PROPOSAL_TIMESTAMP;
-    emit OperationExecuted(id);
-}
+Developers can save around 10 opcodes and some gas if the constructors are defined as `payable`.
 
-By directly incorporating the predecessor check within these functions, you eliminate the need for a separate function call, which can save gas, especially if these functions are called frequently.
+However, it should be noted that it comes with risks because payable constructors can accept ETH during deployment.
 
-## [G-03] Inlining getCommittedBatchTimestamp in ValidatorTimelock Contract
+**INSTANCES:** 10
 
-**`getCommittedBatchTimestamp`:**
+> constructor(uint256 _chainId, Diamond.DiamondCutData memory _diamondCut) {
 
-This function is called within loops in `executeBatches` and `executeBatchesSharedBridge`. Consider directly accessing the `committedBatchTimestamp` mapping within those loops instead of calling this function repeatedly. This can save gas by avoiding function call overhead.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L11-L16
 
-Here's how you can directly access the `committedBatchTimestamp` mapping within the `executeBatches` and `executeBatchesSharedBridge` functions to avoid the overhead of calling `getCommittedBatchTimestamp` repeatedly:
+>  constructor(address _admin, address _securityCouncil, uint256 _minDelay) {
 
-**1 - Update executeBatches function:**
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L41-L51
 
-function executeBatches(StoredBatchInfo[] calldata _newBatchesData) external onlyValidator(ERA_CHAIN_ID) {
-    uint256 delay = executionDelay; // uint32
-    unchecked {
-        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
-            // Directly access committedBatchTimestamp instead of calling getCommittedBatchTimestamp
-            uint256 commitBatchTimestamp = committedBatchTimestamp[ERA_CHAIN_ID].get(_newBatchesData[i].batchNumber);
+> constructor() reentrancyGuardInitializer {}
 
-            // Note: if the `commitBatchTimestamp` is zero, that means either:
-            // * The batch was committed, but not through this contract.
-            // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
-            // We allow executing such batches.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondInit.sol#L19-L19
 
-            require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
-        }
-    }
-    _propagateToZkSyncStateTransition(ERA_CHAIN_ID);
-}
+> constructor() {
 
-**2 - Update executeBatchesSharedBridge function:**
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L40-L43
 
-function executeBatchesSharedBridge(
-    uint256 _chainId,
-    StoredBatchInfo[] calldata _newBatchesData
-) external onlyValidator(_chainId) {
-    uint256 delay = executionDelay; // uint32
-    unchecked {
-        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
-            // Directly access committedBatchTimestamp instead of calling getCommittedBatchTimestamp
-            uint256 commitBatchTimestamp = committedBatchTimestamp[_chainId].get(_newBatchesData[i].batchNumber);
+>  constructor() {
 
-            // Note: if the `commitBatchTimestamp` is zero, that means either:
-            // * The batch was committed, but not through this contract.
-            // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
-            // We allow executing such batches.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L41-L43
 
-            require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
-        }
-    }
-    _propagateToZkSyncStateTransition(_chainId);
-}
+> constructor(address _initialOwner, uint32 _executionDelay) {
 
-By directly accessing the mapping within the loop, you avoid the overhead of calling the `getCommittedBatchTimestamp` function repeatedly, which can save gas, especially when processing multiple batches.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L55-L58
 
-## [G-04] Refactoring commitBatches and commitBatchesSharedBridge in ValidatorTimelock
+> constructor(address _bridgehub) reentrancyGuardInitializer {
 
-**`commitBatches` and `commitBatchesSharedBridge`:**
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L58-L60
 
-These functions share common logic for recording timestamps and calling `_propagateToZkSyncStateTransition`. Consider refactoring them to extract the shared logic into a separate internal function to avoid code duplication and reduce gas costs.
+> constructor(IL1SharedBridge _sharedBridge) reentrancyGuardInitializer {
 
-Here's how you can refactor the `commitBatches` and `commitBatchesSharedBridge` functions in the `ValidatorTimelock` contract to extract shared logic and reduce gas costs:
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L55-L57
 
-**1 - Create a new internal function:**
+> constructor() reentrancyGuardInitializer {}
 
-function _commitBatchesInternal(
-    uint256 _chainId,
-    StoredBatchInfo calldata _lastCommittedBatchData,
-    CommitBatchInfo[] calldata _newBatchesData
-) internal {
-    unchecked {
-        // This contract is only a temporary solution, that hopefully will be disabled until 2106 year, so...
-        // It is safe to cast.
-        uint32 timestamp = uint32(block.timestamp);
-        for (uint256 i = 0; i < _newBatchesData.length; ++i) {
-            committedBatchTimestamp[_chainId].set(_newBatchesData[i].batchNumber, timestamp);
-        }
-    }
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L38-L38
 
-    _propagateToZkSyncStateTransition(_chainId);
-}
+>  constructor(address _l1WethAddress,IBridgehub _bridgehub,IL1ERC20Bridge _legacyBridge) reentrancyGuardInitializer {
 
-This internal function encapsulates the common logic of recording timestamps for committed batches and calling `_propagateToZkSyncStateTransition`. It takes the `chain ID`, last committed batch data, and new batches data as parameters.
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L90-L99
 
-**2 - Update commitBatches function:**
+## [G-06] ABI ENCODE IS LESS EFFICIENT THAN ABI ENCODEPACKED
 
-function commitBatches(
-    StoredBatchInfo calldata _lastCommittedBatchData,
-    CommitBatchInfo[] calldata _newBatchesData
-) external onlyValidator(ERA_CHAIN_ID) {
-    // Call the internal function with the chain ID and other parameters
-    _commitBatchesInternal(ERA_CHAIN_ID, _lastCommittedBatchData, _newBatchesData);
-}
+Unless explicitly needed , it is recommended to use `abi.encodePacked()` instead of `abi.encode()` to save Gas.
 
-## [G-05] Optimizing _encodeBlobAuxilaryOutput in ExecutorFacet
+**INSTANCES:** 10
 
-**_encodeBlobAuxilaryOutput:**
+The contract is using `abi.encode()` in the function `_deployBeaconProxy`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
 
-The function initializes an array of 32 `bytes32` values, but only uses the first two elements. Consider initializing a smaller array to avoid unnecessary memory allocation.
+> (salt, l2TokenProxyBytecodeHash, abi.encode(address(l2TokenBeacon), ""))
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L171-L171
+
+The contract is using `abi.encode()` in the function `initialize`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> storedBatchZero = keccak256(abi.encode(batchZero));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L100-L100
+
+The contract is using `abi.encode()` in the function `initialize`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> initialCutHash = keccak256(abi.encode(_initializeData.diamondCut));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L102-L102
+
+The contract is using `abi.encode()` in the function `setInitialCutHash`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> initialCutHash = keccak256(abi.encode(_diamondCut));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L138-L138
+
+The contract is using `abi.encode()` in the function `setNewVersionUpgrade`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> upgradeCutHash[_oldProtocolVersion] = keccak256(abi.encode(_cutData));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L147-L147
+
+The contract is using `abi.encode()` in the function `setUpgradeDiamondCut`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> upgradeCutHash[_oldProtocolVersion] = keccak256(abi.encode(_cutData));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L156-L156
+
+The contract is using `abi.encode()` in the function `_setL2SystemContractUpgrade`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> bytes memory encodedTransaction = abi.encode(_l2ProtocolUpgradeTx);
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/upgrades/BaseZkSyncUpgrade.sol#L192-L192
+
+The contract is using `abi.encode()` in the function `_processL2ToL1Log`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> chainedLogsHash = keccak256(abi.encode(chainedLogsHash, hashedLog));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/L1Messenger.sol#L106-L106
+
+The contract is using `abi.encode()` in the function `sendToL1`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> chainedMessagesHash = keccak256(abi.encode(chainedMessagesHash, hash));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/L1Messenger.sol#L122-L122
+
+The contract is using `abi.encode()` in the function `requestBytecodeL1Publication`. In `abi.encode()`, all elementary types are padded to `32 bytes` and dynamic arrays include their length, whereas `abi.encodePacked()` will only use the minimal required memory to encode the data.
+
+> chainedL1BytecodesRevealDataHash = keccak256(abi.encode(chainedL1BytecodesRevealDataHash, _bytecodeHash));
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/L1Messenger.sol#L164-L164
+
+## [G-07] EMIT USED IN LOOP
+
+In Solidity, when a code emits an event inside of a loop, internally it performs a `LOG` operation `N` times, where `N` represents the number of iterations in the loop. This can lead to inflated gas costs and potentially impact the efficiency of the code.
+
+To optimize your code and reduce gas consumption, it is recommended to refactor the code to emit the event only once at the end of the loop.
+
+**INSTANCES:** 3
+
+> emit BlockCommit
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol#L261-L265
+
+> emit BlockCommit
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol#L299-L303
+
+> emit BlockExecution
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Executor.sol#L353-L353
+
+## [G-08] GAS OPTIMIZATION FOR THIS KEYWORD
+
+Calling an external function internally, through the use of this keyword wastes gas overhead of calling an external function `100 gas`.
+
+It is recommended to update the function's visibility from external to public and remove the this keyword if gas optimization is needed here.
+
+**INSTANCES:** 4
+
+> try this.decodeString(nameBytes) returns (string memory nameString) {
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L75-L75
+
+> try this.decodeString(symbolBytes) returns (string memory symbolString) {
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L81-L81
+
+> try this.decodeUint8(decimalsBytes) returns (uint8 decimalsUint8) {
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L93-L93
+
+> this.forceDeployOnAddress{value: _deployments[i].value}(_deployments[i], msg.sender);
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/ContractDeployer.sol#L254-L254
+
+## [G-09] USE SELFBALANCE() INSTEAD OF ADDRESS(THIS).BALANCE
+
+In Solidity, efficient use of gas is paramount to ensure cost-effective execution on the Ethereum blockchain. Gas can be optimized when obtaining contract balance by using `selfbalance()` rather than `address(this).balance` because it bypasses gas costs and refunds, which are not required for obtaining the contract's balance.
+
+**INSTANCES:** 4
+
+> uint256 balanceBefore = address(this).balance;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L118-L118
+
+> uint256 balanceAfter = address(this).balance;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L120-L120
+
+> uint256 amount = address(this).balance;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L41-L41
+
+> require(totalRequiredBalance <= address(this).balance, "Not enough balance for fee + value");
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/DefaultAccount.sol#L100-L100
+
+## [G-10] GAS OPTIMIZATION FOR STATE VARIABLES
+
+Plus equals `+=` costs more gas than addition operator. The same thing happens with minus equals `-=`. Therefore, `x +=y` costs more gas than `x = x + y`.
+
+**INSTANCES**: 2
+
+> totalSupply += _amount;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/L2BaseToken.sol#L65-L65
+
+> txNumberInBlock += 1;
+
+https://github.com//code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/SystemContext.sol#L483-L483 
+
+
+ 
+
+ 
+
+
+
 
 
 
