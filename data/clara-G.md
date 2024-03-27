@@ -10,7 +10,8 @@
 |-|:-|:-|:-:|
 | [[G001](#g001---structs-can-be-packed-into-fewer-storage-slots)] | Structs can be packed into fewer storage slots | 4 | - |
 
-| [[G002](#g002---using-this-to-access-functions-results-in-an-external-call-wasting-gas)] | Using this to access functions results in an external call, wasting gas | 3 | - |
+| [[G002](#g002---constructors-can-be-marked-payable)] | Constructors can be marked payable | 10 | 210 |
+
 
 | [[G003](#g003---use-local-variables-for-emitting)] | Use local variables for emitting | 12 | - |
 | [[G004](#g004---using-constants-directly-rather-than-caching-the-value-saves-gas)] | Using constants directly, rather than caching the value, saves gas | 2 | - |
@@ -36,7 +37,9 @@
 | [[G021](#g021---stack-variable-used-as-a-cheaper-cache-for-a-state-variable-is-only-used-once)] | Stack variable used as a cheaper cache for a state variable is only used once | 13 | 3484 |
 | [[G022](#g022---require-or-revert-statements-that-check-input-arguments-should-be-at-the-top-of-the-function)] | require() or revert() statements that check input arguments should be at the top of the function | 6 | - |
 | [[G023](#g023---x--y-costs-more-gas-than-x--x--y-for-state-variables)] | `<x> += <y>` costs more gas than `<x> = <x> + <y>` for state variables | 11 | 1243 |
-| [[G024](#g024---constructors-can-be-marked-payable)] | Constructors can be marked payable | 10 | 210 |
+
+| [[G024](#g024---using-this-to-access-functions-results-in-an-external-call-wasting-gas)] | Using this to access functions results in an external call, wasting gas | 3 | - |
+
 | [[G025](#g025---remove-unused-local-variables)] | Remove unused local variables | 1 | - |
 | [[G026](#g026----costs-less-gas-than-)] | `>=` costs less gas than `>` | 3 | 9 |
 | [[G027](#g027---assigning-state-variables-directly-with-named-struct-constructors-wastes-gas)] | Assigning state variables directly with named struct constructors wastes gas | 1 | 
@@ -230,27 +233,164 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 </details>
 
-## G002 - Using this to access functions results in an external call, wasting gas:
 
-External calls have an overhead of 100 gas, which can be avoided by not referencing the function using this. Contracts are allowed to override their parents' functions and change the visibility from external to public, so make this change if it's required in order to call the function internally.
 
+## G002 - Constructors can be marked payable:
+
+Payable functions cost less gas to execute, since the compiler does not have to add extra checks to ensure that a payment wasn't provided. A constructor can safely be marked as payable, since only the deployer would be able to pass funds, and the project itself would not pass any funds.
+
+
+<details>
+<summary>Click to show 10 findings</summary>
+
+```solidity
+File: contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol
+
+
+55          constructor(IL1SharedBridge _sharedBridge) reentrancyGuardInitializer {
+56              sharedBridge = _sharedBridge;
+57          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L55:57
+
+```solidity
+File: contracts/ethereum/contracts/bridge/L1SharedBridge.sol
+
+
+90          constructor(
+91              address _l1WethAddress,
+92              IBridgehub _bridgehub,
+93              IL1ERC20Bridge _legacyBridge
+94          ) reentrancyGuardInitializer {
+95              _disableInitializers();
+96              l1WethAddress = _l1WethAddress;
+97              bridgehub = _bridgehub;
+98              legacyBridge = _legacyBridge;
+99          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L90:99
+
+```solidity
+File: contracts/ethereum/contracts/bridgehub/Bridgehub.sol
+
+
+38          constructor() reentrancyGuardInitializer {}
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L38:38
+
+```solidity
+File: contracts/ethereum/contracts/governance/Governance.sol
+
+
+41          constructor(address _admin, address _securityCouncil, uint256 _minDelay) {
+42              require(_admin != address(0), "Admin should be non zero address");
+43      
+44              _transferOwnership(_admin);
+45      
+46              securityCouncil = _securityCouncil;
+47              emit ChangeSecurityCouncil(address(0), _securityCouncil);
+48      
+49              minDelay = _minDelay;
+50              emit ChangeMinDelay(0, _minDelay);
+51          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L41:51
+
+```solidity
+File: contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+
+
+58          constructor(address _bridgehub) reentrancyGuardInitializer {
+59              bridgehub = _bridgehub;
+60          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L58:60
+
+```solidity
+File: contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol
+
+
+55          constructor(address _initialOwner, uint32 _executionDelay) {
+56              _transferOwnership(_initialOwner);
+57              executionDelay = _executionDelay;
+58          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L55:58
+
+```solidity
+File: contracts/ethereum/contracts/state-transition/chain-deps/DiamondInit.sol
+
+
+19          constructor() reentrancyGuardInitializer {}
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondInit.sol#L19:19
+
+```solidity
+File: contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol
+
+
+11          constructor(uint256 _chainId, Diamond.DiamondCutData memory _diamondCut) {
+12              // Check that the contract is deployed on the expected chain.
+13              // Thus, the contract deployed by the same Create2 factory on the different chain will have different addresses!
+14              require(_chainId == block.chainid, "pr");
+15              Diamond.diamondCut(_diamondCut);
+16          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L11:16
+
+```solidity
+File: contracts/zksync/contracts/bridge/L2SharedBridge.sol
+
+
+41          constructor() {
+42              _disableInitializers();
+43          }
+
+
+```
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L41:43
 
 ```solidity
 File: contracts/zksync/contracts/bridge/L2StandardERC20.sol
 
 
-75              try this.decodeString(nameBytes) returns (string memory nameString) {
-
-
-81              try this.decodeString(symbolBytes) returns (string memory symbolString) {
-
-
-93              try this.decodeUint8(decimalsBytes) returns (uint8 decimalsUint8) {
+40          constructor() {
+41              // Disable initialization to prevent Parity hack.
+42              _disableInitializers();
+43          }
 
 
 ```
 
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L93:93
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L40:43
+
+
+
 
 ## G003 - Use local variables for emitting:
 
@@ -3977,159 +4117,29 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/system-contracts/con
 
 </details>
 
-## G024 - Constructors can be marked payable:
+## G024 - Using this to access functions results in an external call, wasting gas:
 
-Payable functions cost less gas to execute, since the compiler does not have to add extra checks to ensure that a payment wasn't provided. A constructor can safely be marked as payable, since only the deployer would be able to pass funds, and the project itself would not pass any funds.
+External calls have an overhead of 100 gas, which can be avoided by not referencing the function using this. Contracts are allowed to override their parents' functions and change the visibility from external to public, so make this change if it's required in order to call the function internally.
 
-
-<details>
-<summary>Click to show 10 findings</summary>
-
-```solidity
-File: contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol
-
-
-55          constructor(IL1SharedBridge _sharedBridge) reentrancyGuardInitializer {
-56              sharedBridge = _sharedBridge;
-57          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L55:57
-
-```solidity
-File: contracts/ethereum/contracts/bridge/L1SharedBridge.sol
-
-
-90          constructor(
-91              address _l1WethAddress,
-92              IBridgehub _bridgehub,
-93              IL1ERC20Bridge _legacyBridge
-94          ) reentrancyGuardInitializer {
-95              _disableInitializers();
-96              l1WethAddress = _l1WethAddress;
-97              bridgehub = _bridgehub;
-98              legacyBridge = _legacyBridge;
-99          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L90:99
-
-```solidity
-File: contracts/ethereum/contracts/bridgehub/Bridgehub.sol
-
-
-38          constructor() reentrancyGuardInitializer {}
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L38:38
-
-```solidity
-File: contracts/ethereum/contracts/governance/Governance.sol
-
-
-41          constructor(address _admin, address _securityCouncil, uint256 _minDelay) {
-42              require(_admin != address(0), "Admin should be non zero address");
-43      
-44              _transferOwnership(_admin);
-45      
-46              securityCouncil = _securityCouncil;
-47              emit ChangeSecurityCouncil(address(0), _securityCouncil);
-48      
-49              minDelay = _minDelay;
-50              emit ChangeMinDelay(0, _minDelay);
-51          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L41:51
-
-```solidity
-File: contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
-
-
-58          constructor(address _bridgehub) reentrancyGuardInitializer {
-59              bridgehub = _bridgehub;
-60          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L58:60
-
-```solidity
-File: contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol
-
-
-55          constructor(address _initialOwner, uint32 _executionDelay) {
-56              _transferOwnership(_initialOwner);
-57              executionDelay = _executionDelay;
-58          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L55:58
-
-```solidity
-File: contracts/ethereum/contracts/state-transition/chain-deps/DiamondInit.sol
-
-
-19          constructor() reentrancyGuardInitializer {}
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondInit.sol#L19:19
-
-```solidity
-File: contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol
-
-
-11          constructor(uint256 _chainId, Diamond.DiamondCutData memory _diamondCut) {
-12              // Check that the contract is deployed on the expected chain.
-13              // Thus, the contract deployed by the same Create2 factory on the different chain will have different addresses!
-14              require(_chainId == block.chainid, "pr");
-15              Diamond.diamondCut(_diamondCut);
-16          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L11:16
-
-```solidity
-File: contracts/zksync/contracts/bridge/L2SharedBridge.sol
-
-
-41          constructor() {
-42              _disableInitializers();
-43          }
-
-
-```
-
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L41:43
 
 ```solidity
 File: contracts/zksync/contracts/bridge/L2StandardERC20.sol
 
 
-40          constructor() {
-41              // Disable initialization to prevent Parity hack.
-42              _disableInitializers();
-43          }
+75              try this.decodeString(nameBytes) returns (string memory nameString) {
+
+
+81              try this.decodeString(symbolBytes) returns (string memory symbolString) {
+
+
+93              try this.decodeUint8(decimalsBytes) returns (uint8 decimalsUint8) {
 
 
 ```
 
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L40:43
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/zksync/contracts/bridge/L2StandardERC20.sol#L93:93
+
+
 
 </details>
 
