@@ -79,9 +79,59 @@ In L1SharedBridge::`_claimFaiedDeposit`, instead of `bool notCheckedInLegacyBrid
 (1) if `_checkedInLegacyBridge` is true, `depositAmount` record is already checked and deleted in L1ERC20Bridge, which means deposit is made through L1ERC20Bridge (either oldERC20 bridge or newERC20 bridge). We only need to delete `depositHappened[_chainId][_l2TxHash]` to prevent double claiming.
 (2) if `_checkedInLegacyBridge` is false. Either deposit is made through new L1ERC20Bridge or made directly through L1SharedBridge. We check `depositHappened[_chainId][_l2TxHash]`  first, a) if dataHash matches, we confirm and delete `depositHappened[_chainId][_l2TxHash]` to prevent double claiming. b) if dataHash doesn't match or doesn't exist, we reject the claim. Either the deposit is made with old L1ERC20Bridge, which can be claimed from new L1ERC20Bridge (same as (1) flow), Or deposit already claimed, OR the deposit doesn't exist. 
 
+### Low-03 Add checks to ensure that resetting admin-controlled parameters will not set the same old value (Not included in Bot report)
+**Instances(3)**
+In some instances, resetting admin-controlled parameters lacks checks to ensure the new value will not be the old value. Consider adding a check to ensure the state is only written when the new value differs.
 
+(1)
+```solidity
+//code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol
+    function setPendingAdmin(
+        address _newPendingAdmin
+    ) external onlyOwnerOrAdmin {
+        // Save previous value into the stack to put it into the event later
+        address oldPendingAdmin = pendingAdmin;
+        // Change pending admin
+        //@audit Add check to ensure newPendingAdmin is different from oldPendingAdmin before writing to storage
+|>      pendingAdmin = _newPendingAdmin;
+        emit NewPendingAdmin(oldPendingAdmin, _newPendingAdmin);
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L55)
+(2)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+    function setPendingAdmin(
+        address _newPendingAdmin
+    ) external onlyOwnerOrAdmin {
+        // Save previous value into the stack to put it into the event later
+        address oldPendingAdmin = pendingAdmin;
+        // Change pending admin
+        //@audit Add check to ensure newPendingAdmin is different from oldPendingAdmin before writing to storage
+|>      pendingAdmin = _newPendingAdmin;
+        emit NewPendingAdmin(oldPendingAdmin, _newPendingAdmin);
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L114)
 
+(3)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+    function setNewVersionUpgrade(
+        Diamond.DiamondCutData calldata _cutData,
+        uint256 _oldProtocolVersion,
+        uint256 _newProtocolVersion
+    ) external onlyOwner {
 
+        upgradeCutHash[_oldProtocolVersion] = keccak256(abi.encode(_cutData));
+        //@audit-info note: it didn't check the _newProtocolVersion is different from _oldProtocolVersion, only overwrite protocolVerision when _newProtocolVersion is different from current protocolVersion
+ |>     protocolVersion = _newProtocolVersion;
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L148)
+
+Recommendations:
+Consider adding if-condition to only overwrite state parameter when the new value differs from the current value.
 
 
 
