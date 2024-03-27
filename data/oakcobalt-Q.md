@@ -184,4 +184,63 @@ A state transition(ST) can be malicious. The hyperchain implementation is based 
 Recommendations:
 In `unfreezeChain`, change to call `unfreezeDiamond()`.
 
+### Low-06 Outdated comments - Change 'ETH' to base token
+**Instances(1)**
+The the hyperchain setup baseToken is used instead of `ETH`. However, in some cases, outdated comments are left. 
+(1)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol
+    //@audit It should be L2 gas in baseToken, not ETH, because ST can have a non-eth baseToken, and this function to convert ETH price to baseToken denomination.
+|>  /// @notice Derives the price for L2 gas in ETH to be paid.
+    /// @param _l1GasPrice The gas price on L1
+    /// @param _gasPerPubdata The price for each pubdata byte in L2 gas
+    /// @return The price of L2 gas in ETH
+    function _deriveL2GasPrice(
+        uint256 _l1GasPrice,
+        uint256 _gasPerPubdata
+    ) internal view returns (uint256) {
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L152)
+
+Recommendations:
+Change 'ETH' to baseToken.
+
+### Low-07 If an ST has a baseToken with a different decimal from ETH, `_deriveL2GasPrice` might return incorrect value due to rounding, causing gas incorrectly paid
+**Instances(1)**
+If an ST chain has a baseToken with a different decimal from ETH. The implementation in `_deriveL2GasPrice` might cause rounding errors.
+
+For example, suppose 1 ETH = 0.1 baseToken (8 decimals), and current `_l1GasPrice` is 36 gwei/gas.
+
+Current implementation: ` uint256 l1GasPriceConverted = (_l1GasPrice * s.baseTokenGasPriceMultiplierNominator) / s.baseTokenGasPriceMultiplierDenominator;`
+
+`l1GasPriceConverted` = 36e9 * 0.1*1e6/1e18 = 36e-4 -> 0 baseToken/gas
+Note: the resulting `l1GasPriceConverted` will not be scaled and has to be in baseToken decimal because it is used directly to [multiply gas](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L271) for baseToken amount transfer.
+
+In `_deriveL2GasPrice`, when `l1GasPriceConverted` round to 0. `batchOverheadBaseToken` and `pubdataPriceBaseToken` will return 0, L2 gas will be underestimated and underpaid.
+
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol
+    function _deriveL2GasPrice(uint256 _l1GasPrice, uint256 _gasPerPubdata) internal view returns (uint256) {
+...
+|>      uint256 l1GasPriceConverted = (_l1GasPrice * s.baseTokenGasPriceMultiplierNominator) /
+            s.baseTokenGasPriceMultiplierDenominator;
+        uint256 pubdataPriceBaseToken;
+        if (feeParams.pubdataPricingMode == PubdataPricingMode.Rollup) {
+            pubdataPriceBaseToken = L1_GAS_PER_PUBDATA_BYTE * l1GasPriceConverted;
+        }
+
+        uint256 batchOverheadBaseToken = uint256(feeParams.batchOverheadL1Gas) * l1GasPriceConverted;
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L159-L160)
+
+Recommendations:
+(1) Consider adding a scaling multiplier for a baseToken (2)Then, scaling up the converted gas price value and then scaling down before baseToken transfer.
+
+
+
+
+
+
 
