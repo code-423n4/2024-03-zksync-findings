@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "saneryee",
+  "risk": "2",
+  "title": "Function `l2TransactionBaseCost`  in `Mailbox.sol` Lacks Range Checks for Parameters and Validation in Process Logic, Leading to Unreasonable Cost Calculation Results",
+  "issueId": 61,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/61"
+}
