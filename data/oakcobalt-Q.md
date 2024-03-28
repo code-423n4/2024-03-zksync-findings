@@ -359,6 +359,60 @@ In `upgradeChainFromVersion()`, there is no checking on ST's current version `s.
 Recommendations:
 If the quote above from the doc should hold true, in `upgradeChainFromVersion()`, add a check to ensure `s.protocolVersion` == StateTransitionManger.protocolVersion() - 1, before allowing ST self-upgrade.
 
+### Low-11 L1SharedBridge::bridgehubDeposit may cause random revert on L2 due to no check on `l2value`
+**Instances(1)**
+The new ERC20 l1-l2 deposit flow starts from Bridgehub::requestL2TransactionTwoBridges which allows ERC20 deposit to be done by a second bridge. The second bridge can be (1)either L1SharedBridge, (2) or third-party custom bridges.
+
+The problem arises when L1SharedBridge is used as the second bridge. 
+
+L1SharedBridge::`bridgehubDeposit` will be called to create ERC20 l1-l2 deposits. However, in `bridgehubDeposit()`, `l2Value` field is [not checked to be zero](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L185). When [user passes non-zero](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L292) `l2Value` to Bridgehub::`requestL2TransactionTwoBridges`, `l2Value` will be used as `msg.value` for L2SharedBridge's`finalizeDeposit()`. When `msg.value` is non-zero,  L2SharedBridge's`finalizeDeposit()` will [revert due to check](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L92) `require(msg.value == 0, "Value should be 0 for ERC20 bridge")`.
+
+```solidity
+//code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol
+    function requestL2TransactionTwoBridges(
+        L2TransactionRequestTwoBridgesOuter calldata _request
+    ) external payable override nonReentrant returns (bytes32 canonicalTxHash) {
+...
+        L2TransactionRequestTwoBridgesInner memory outputRequest = IL1SharedBridge(_request.secondBridgeAddress)
+            .bridgehubDeposit{value: _request.secondBridgeValue}(
+            _request.chainId,
+            msg.sender,
+|>          _request.l2Value,  //@audit When secondBridge is L1SharedBridge, user might input non-zero l2Value
+            _request.secondBridgeCalldata
+        );
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L292)
+```solidity
+//code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol
+    function bridgehubDeposit(
+        uint256 _chainId,
+        address _prevMsgSender,
+ |>     uint256, // l2Value, needed for Weth deposits in the future //@audit Although not used for Weth now, current ERC20 deposit flow require l2Value == 0, this is not checked
+        bytes calldata _data
+    )
+        external
+        payable
+        override
+        onlyBridgehub
+        returns (L2TransactionRequestTwoBridgesInner memory request)
+    {
+...
+            // Request the finalization of the deposit on the L2 side
+            //@audit This encode L2Bridge.finalizeDeposit() to be called on L2SharedBrdige, if L2Value is non-zero, L2SharedBridge will revert the tx, causing user ERC20 deposit to fail.
+|>            bytes memory l2TxCalldata = _getDepositL2Calldata(
+                _prevMsgSender,
+                _l2Receiver,
+                _l1Token,
+                amount
+            );
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L185)
+
+For comparison, L1ERC20Bridge.sol's ERC20 deposit flow [will always ensure l2Value == 0](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L588).
+
+Recommendations:
+In L1SharedBridge::bridgehubDeposit, if _l1Token is not WETH (currently not supported), add a check to ensure `_l2Value` == 0.
+
 
 
 
