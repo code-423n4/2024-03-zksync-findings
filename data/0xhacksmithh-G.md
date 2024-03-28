@@ -1,3 +1,43 @@
+### [Gas-] via `re-organizing elements` in struct extra storage slot ca saved [Gas saved upto 3 storage slot = 3 * 2000 = 6000]
+
+1. here bool `zkPorterIsAvailable` consume a whole slot, so moving it to near smaller storage like `address` 1 whole storage slot can saved
+
+2. By reducing size of `uint256 protocolVersion` and `uint256 chainId` to `uint128` and packing them into single slot, result in saving 1 extra storage slot
+
+3. If you reduce above 2 further like to `uint64` and packing them with a `address` type so 2 whole storage slot saved
+```diff
+struct ZkSyncStateTransitionStorage {
+....
+....
+    /// @dev Used as an input to zkp-circuit.
+-   bool zkPorterIsAvailable;   // @audit G:: re-arrange to save gas
+    /// @dev The maximum number of the L2 gas that a user can request for L1 -> L2 transactions
+    /// @dev This is the maximum number of L2 gas that is available for the "body" of the transaction, i.e.
+    /// without overhead for proving the batch.
+...
+...
+-   uint256 protocolVersion;   // @audit G:: decrease size
+    /// @dev Hash of the system contract upgrade transaction. If 0, then no upgrade transaction needs to be done.
+    bytes32 l2SystemContractsUpgradeTxHash;
+    /// @dev Batch number where the upgrade transaction has happened. If 0, then no upgrade transaction has happened
+    /// yet.
+    uint256 l2SystemContractsUpgradeBatchNumber;
+    /// @dev Address which will exercise non-critical changes to the Diamond 
+...
+...
+-   uint256 chainId;   // @audit G:: could decrease in size
+    /// @dev The address of the bridgehub
+    address bridgehub;
+...
+...
+}
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/ZkSyncStateTransitionStorage.sol#L103
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/ZkSyncStateTransitionStorage.sol#L123
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/ZkSyncStateTransitionStorage.sol#L140
+
 ### [Gas-N1] Optimize Modifiers
 The code of modifiers is placed in a modified function, and modifier code is copied in all instances where it’s used. This will increase bytecode size and gas usage.
 
@@ -48,6 +88,11 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L70
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/ZkSyncStateTransitionBase.sol#L38
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/ZkSyncStateTransitionBase.sol#L46
 
 ### [Gas-N2] Use `delete` instead of setting variable value to `default`
 ```
@@ -80,6 +125,14 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L210
 
+```diff
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L356
+
+```diff
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L356
+
 ### [Gas-N5] By moving less gas consuming check to up and more gas consuming check to below(Re-ordering) a significant amount of gas can saved during check failure
 ```diff
     function _schedule(bytes32 _id, uint256 _delay) internal {
@@ -111,6 +164,12 @@ Its clear that 2nd one consume less gas, so it should move to top
 No failure of this check, a significant amount of gas can saved as function will not need to run 1st expensive check
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L216-L217
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L25
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L31
 
 
 ### [Gas-N6] `require( || )` should be split into individual `require` as it will be more gas efficient.
@@ -301,6 +360,14 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L127
 
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L28
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L62
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L86
+
 ### [Gas-N20] Instaed of setting variable to `default` use `delete`
 ```diff
     function removeStateTransitionManager(address _stateTransitionManager) external onlyOwner {
@@ -313,6 +380,10 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 +       delete stateTransitionManagerIsRegistered[_stateTransitionManager] ;
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L97
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L147
 
 ### [Gas-N21] Via decreasing size of `chainId` & `l2GasLimit` & tight packing we can save extra storage slot in struct `L2TransactionRequestDirect` & `L2TransactionRequestTwoBridgesOuter` (Gas saved -> 2 SLOT = 2*2000)
 
@@ -388,6 +459,10 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/libraries/Diamond.sol#L179
 
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L35
+
 ### [Gas-N26] `ds.selectorToFacet[_selector]` mapping call should be cached in `memory` rater than calling it multiple times
 ```diff
     function _removeOneFunction(address _facet, bytes4 _selector) private {
@@ -429,9 +504,18 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L127-128
 
-### [Gas-N28] 
 ```
 ```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L40-L41
+
+### [Gas-N28] Instead of dynamic storage like `string` try to use some fixed type storage like `bytes32`
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Getters.sol#L25
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L28
 
 
 ### [Gas-N29] Operation `%` can be optimizable via using `asembly` as follows
@@ -474,6 +558,15 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L192
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L216
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L111
+
+
+### [Gas-N34] Instead of `address(this).balance` try to use `self.balance`
+
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L41
 
 ### [Gas-1] Stack variable is only used once
 ```
@@ -558,6 +651,14 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L100-L102
 
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L323
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L104
+
 ### [Gas-10] Multiple address/ID mappings can be combined into a single mapping of an address/ID to a struct
 ```
 ```
@@ -574,6 +675,10 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L57
 
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L65
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/ZkSyncStateTransitionStorage.sol#L114
 
 
 ### [Gas-11] Use solady library where possible to save gas
@@ -642,6 +747,14 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/upgrades/BaseZkSyncUpgradeGenesis.sol#L19
 
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L185
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L19
+
 ### [Gas-20] The result of function calls should be cached rather than re-calling the function
 ```
 ```
@@ -702,6 +815,10 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L108
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L109
 
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/DiamondProxy.sol#L30
+
 ### [Gas-25] Optimize Gas by Using Only Named Returns
 ```
 ```
@@ -715,6 +832,10 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 
 ### [Gas-27] Use Assembly for Efficient Memory Management in Multiple External Calls
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L43
+
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L226
@@ -808,6 +929,11 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/libraries/TransactionValidator.sol#L73
+
+```
+```
+https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Mailbox.sol#L147
+
 ### [Gas-41] Optimize names to save gas
 ```
 ```
