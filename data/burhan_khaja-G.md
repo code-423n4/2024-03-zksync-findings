@@ -1034,6 +1034,7 @@ File: system-contracts/contracts/SystemContext.sol
 [Link to code](https://github.com/code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/SystemContext.sol)
 
 ## G-09 - Calling functions via interface incurs memory expansion costs, so use assembly to re-use data already in memory
+`Note: it is not Gas-7 from` [4nalyzer](https://github.com/code-423n4/2024-03-zksync/blob/main/4naly3er-report.md#gas-7-avoid-contract-existence-checks-by-using-low-level-calls)`, they seem same but are different concepts and plus i have different instances here which are no where in 4nalyzer report. Additionally, Gas-7 is about contract existence checks, while this is specific to using interfaces`
 
 When calling a function on a contract B from another contract A, it’s most convenient to use the interface, create an instance of B with an address and call the function we wish to call. This works very well, but due to how solidity compiles our code, it stores the data to send to contract B in a new memory location thereby expanding memory, sometimes unnecessarily.
 
