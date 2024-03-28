@@ -80,7 +80,7 @@
 
 ## Auditor's Disclaimer :
 
-_All these findings are good findings and 100% safe to implement at no security/logic risk. They all are found by thorough manual review. And this report is created by explaining high quality gas findings in detail._
+_All these findings are good findings and 100% safe to implement at no security/logic risk. They all are found by thorough manual review. And this report is created manually by explaining gas findings in detail.._
 
 ## [G-01] Struct variable can be packed into fewer storage slots by rearranging the order of variables in struct(**Gas Saved ~2000 Gas**)
 
