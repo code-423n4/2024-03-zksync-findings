@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Bauchibred",
+  "risk": "2",
+  "title": "Deviational use of `useNearCallPanic` while querying `mintEther()` in `ZKSYNC_NEAR_CALL_executeL1Tx()` could cost users all their gas for the execution",
+  "issueId": 128,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/128"
+}
