@@ -1,43 +1,39 @@
-### Low Risk
+### Low Risk Issues
 
-| Count                                                                                                                                                                                   | Title                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [[L-01](#l-01-check-for-the-maximum-difference-between-protocol-versions-may-be-redundant-given-the-existing-checks-implemented-in-the-basezksyncupgradegenesis_setnewprotocolversion)] | Check for the maximum difference between protocol versions may be redundant given the existing checks implemented in the `BaseZkSyncUpgradeGenesis::_setNewProtocolVersion` |
-| [[L-02](#l-02-checking-the-success-status-of-each-low-level-call-and-reverting-if-any-call-fails)]                                                                                      | Checking the success status of each low-level call and reverting if any call fails                                                                                          |
-| [[L-03](#l-03-emit-events-before-external-call)]                                                                                                                                        | Emit events before external call                                                                                                                                            |
-| [[L-04](#l-04-remove-unchecked-block)]                                                                                                                                                  | Remove `unchecked` block                                                                                                                                                    |
-| [[L-05](#l-05-mispleading-event)]                                                                                                                                                       | Mispleading event                                                                                                                                                           |
-| [[L-06](#l-06-override-the-renounceownership-function)]                                                                                                                                 | Override the `renounceOwnership` function                                                                                                                                   |
-| [[L-07](#l-07-missing-checks-for-address0x0-in-the-constructor)]                                                                                                                        | Missing checks for `address(0x0)` in the `constructor`                                                                                                                      |
-| [[L-08](#l-08-missing-zero-address-check-in-functions-with-address-parameters)]                                                                                                         | Missing zero address check in functions with address parameters                                                                                                             |
+- [L-01] [Check for the maximum difference between protocol versions may be redundant given the existing checks implemented in the `BaseZkSyncUpgradeGenesis::_setNewProtocolVersion`](#l-01-check-for-the-maximum-difference-between-protocol-versions-may-be-redundant-given-the-existing-checks-implemented-in-the-basezksyncupgradegenesis_setnewprotocolversion)
+- [L-02] [Checking the success status of each low-level call and reverting if any call fails](#l-02-checking-the-success-status-of-each-low-level-call-and-reverting-if-any-call-fails)
+- [L-03] [Emit events before external call](#l-03-emit-events-before-external-call)
+- [L-04] [Remove `unchecked` block](#l-04-remove-unchecked-block)
+- [L-05] [Mispleading event](#l-05-mispleading-event)
+- [L-06] [Override the `renounceOwnership` function](#l-06-override-the-renounceownership-function)
+- [L-07] [Missing checks for `address(0x0)` in the `constructor`](#l-07-missing-checks-for-address0x0-in-the-constructor)
+- [L-08] [Missing zero address check in functions with address parameters](#l-08-missing-zero-address-check-in-functions-with-address-parameters)
+- [L-09] [State variables `l2Bridge`, `l2TokenBeacon`, and `l2TokenProxyBytecodeHash` are not explicitly initialized](#l-09-state-variables-l2bridge-l2tokenbeacon-and-l2tokenproxybytecodehash-are-not-explicitly-initialized)
 
-| Total Low Risk Issues | 8   |
+| Total Low Risk Issues | 9   |
 | --------------------- | --- |
 
-### Non-Critical
+### Non-Critical Issues
 
-| Count                                                                                                | Title                                                                                      |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [[N-01](#n-01-natspec-event-missing-natspec-dev-tag)]                                                | NatSpec: `Event` missing NatSpec `@dev` tag                                                |
-| [[N-02](#n-02-the-upgrade-function-declares-a-return-type-but-does-not-explicitly-return-any-value)] | The `upgrade` function declares a `return` type but does not explicitly `return` any value |
-| [[N-03](#n-03-natspec-functions-missing-natspec-return-tag)]                                         | NatSpec: Functions missing NatSpec `@return` tag                                           |
-| [[N-04](#n-04-natspec-contract-declarations-should-have-author-tags)]                                | NatSpec: Contract declarations should have `@author` tags                                  |
-| [[N-05](#n-05-natspec-contract-declarations-should-have-dev-tags)]                                   | NatSpec: Contract declarations should have `@dev` tags                                     |
-| [[N-06](#n-06-natspec-modifier-missing-natspec-dev-tag)]                                             | NatSpec: Modifier missing NatSpec `@dev` tag                                               |
-| [[N-07](#n-07-natspec-modifier-missing-natspec-param-tag)]                                           | NatSpec: Modifier missing NatSpec `@param` tag                                             |
-| [[N-08](#n-08-not-using-the-named-return-variables-when-a-function-returns)]                         | Not using the named return variables when a function returns                               |
-| [[N-09](#n-09-order-of-functions-dont-follow-solidity-style-guide)]                                  | Order of functions don't follow solidity style guide                                       |
+- [N-01] [NatSpec: `Event` missing NatSpec `@dev` tag](#n-01-natspec-event-missing-natspec-dev-tag)
+- [N-02] [The `upgrade` function declares a `return` type but does not explicitly `return` any value](#n-02-the-upgrade-function-declares-a-return-type-but-does-not-explicitly-return-any-value)
+- [N-03] [NatSpec: Functions missing NatSpec `@return` tag](#n-03-natspec-functions-missing-natspec-return-tag)
+- [N-04] [NatSpec: Contract declarations should have `@author` tags](#n-04-natspec-contract-declarations-should-have-author-tags)
+- [N-05] [NatSpec: Contract declarations should have `@dev` tags](#n-05-natspec-contract-declarations-should-have-dev-tags)
+- [N-06] [NatSpec: Modifier missing NatSpec `@dev` tag](#n-06-natspec-modifier-missing-natspec-dev-tag)
+- [N-07] [NatSpec: Modifier missing NatSpec `@param` tag](#n-07-natspec-modifier-missing-natspec-param-tag)
+- [N-08] [Not using the named return variables when a function returns](#n-08-not-using-the-named-return-variables-when-a-function-returns)
+- [N-09] [Order of functions don't follow solidity style guide](#n-09-order-of-functions-dont-follow-solidity-style-guide)
 
 | Total Non-Critical Issues | 9   |
 | ------------------------- | --- |
 
 # Low Risk
 
-## [L-01] Check for the maximum difference between protocol versions is not implemented in `StateTransitionManager::setNewVersionUpgrade` unlike implemented in the `BaseZkSyncUpgradeGenesis::_setNewProtocolVersion`
+## [L-01] Check for the maximum difference between protocol versions may be redundant given the existing checks implemented in the `BaseZkSyncUpgradeGenesis::_setNewProtocolVersion`
 
 The `_setNewProtocolVersion` function, which is called internally to change the protocol version, already includes a requirement that the new protocol version must be greater than or equal to the previous one.
-Additionally, it checks if the difference between the new and previous protocol versions does not exceed a certain threshold (`MAX_ALLOWED_PROTOCOL_VERSION_DELTA`).
-So it is good to add this check also in `setNewVersionUpgrade` function to ensure consistency in the protocol version. And avoid changing the new Protocol version which has difference of >100 from prev. version increases ambiguity and inconsistency in version setting.
+Additionally, it checks if the difference between the new and previous protocol versions does not exceed a certain threshold (`MAX_ALLOWED_PROTOCOL_VERSION_DELTA`). The existing checks in `_setNewProtocolVersion` already ensure that the upgrade process adheres to sensible constraints, preventing sudden jumps in protocol versions that could potentially disrupt the system.
 
 ```solidity
 File : contracts/ethereum/contracts/upgrades/BaseZkSyncUpgradeGenesis.sol
@@ -62,7 +58,6 @@ File : contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
             uint256 _oldProtocolVersion,
             uint256 _newProtocolVersion
         ) external onlyOwner {
-                //@audit add above two require checks here to ensure new protocol version is > old and <= 100 + old version
             upgradeCutHash[_oldProtocolVersion] = keccak256(abi.encode(_cutData));
 148:        protocolVersion = _newProtocolVersion;
         }
@@ -275,6 +270,26 @@ File : contracts/ethereum/contracts/bridgehub/Bridgehub.sol
 ```
 
 [108-109](https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L108C1-L109C55)
+
+## [L-09] State variables `l2Bridge`, `l2TokenBeacon`, and `l2TokenProxyBytecodeHash` are not explicitly initialized
+
+In `L1ERC20Bridge` contract , If these variables are not initialized explicitly, they will indeed take on the default values for their respective types. You may want to initialize these variables in the constructor or at some point during the contract execution to ensure they hold meaningful values.
+Otherwise they will always gives 0 value.
+
+```solidity
+File : contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol
+
+36:    address public l2Bridge;
+
+       /// @dev The address that is used as a beacon for L2 tokens in zkSync Era.
+39:    address public l2TokenBeacon;
+
+       /// @dev Stores the hash of the L2 token proxy contract's bytecode on zkSync Era.
+42:    bytes32 public l2TokenProxyBytecodeHash;
+
+```
+
+[36-42](https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L36C5-L42C45)
 
 # Non-Critical
 
