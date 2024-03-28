@@ -414,5 +414,24 @@ Recommendations:
 In L1SharedBridge::bridgehubDeposit, if _l1Token is not WETH (currently not supported), add a check to ensure `_l2Value` == 0.
 
 
+### Low-12 Unused imports `KECCAK256_SYSTEM_CONTRACT` (Not included in bot report)
+**Instances(1)**
+`KECCAK256_SYSTEM_CONTRACT` is imported in ContractDeployer.sol but never used.
 
+```solidity
+//code/system-contracts/contracts/ContractDeployer.sol
+import {CREATE2_PREFIX, CREATE_PREFIX, NONCE_HOLDER_SYSTEM_CONTRACT, ACCOUNT_CODE_STORAGE_SYSTEM_CONTRACT, FORCE_DEPLOYER, MAX_SYSTEM_CONTRACT_ADDRESS, KNOWN_CODE_STORAGE_CONTRACT, BASE_TOKEN_SYSTEM_CONTRACT, IMMUTABLE_SIMULATOR_SYSTEM_CONTRACT, COMPLEX_UPGRADER_CONTRACT, KECCAK256_SYSTEM_CONTRACT} from "./Constants.sol";
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/ContractDeployer.sol#L7)
+
+Recommendations:
+Remove the unused import.
+
+### Low-13 New system precompile contract addresses are not declared in Constants.sol
+**Instances(1)**
+The newly added system precompile codeOracle.yul and P256Verify.yul addresses [are not added to Constants.sol](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/Constants.sol).
+
+Recommendations:
+Consider adding the new precompile address to Constant.sol
 
