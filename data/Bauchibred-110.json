@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Bauchibred",
+  "risk": "2",
+  "title": " `SystemContext::getCurrentPubdataSpent()` incorrectly calculates gas fees due to assumption of the gas per pubdata being the same as the amount of pubdata already published",
+  "issueId": 110,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/110"
+}
