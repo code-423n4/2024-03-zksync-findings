@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Bauchibred",
+  "risk": "2",
+  "title": "The enforcement of the maximum amount of L2 gas that should be spent on a transaction is flawed as it allows the gas spent to be more than the `Operator's trust limit`",
+  "issueId": 75,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/75"
+}
