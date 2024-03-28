@@ -351,6 +351,23 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L339-L344
 
+##
+
+## [G-1] Don't cache the ``_refundRecipient`` its already memory variable 
+
+The reassignment of _refundRecipient to refundRecipient is unnecessary since _refundRecipient is already a memory variable and its value can be used directly within the function. This redundancy does not contribute to efficiency or clarity and could be streamlined for better readability and gas efficiency. Saves ``35 GAS``
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+577: address refundRecipient = _refundRecipient;
+578: if (_refundRecipient == address(0)) {
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L577
+
+
 
 ##
 
@@ -890,6 +907,35 @@ FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
 
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L88
+
+##
+
+## [G-] This check ``require(block.timestamp >= commitBatchTimestamp + delay, "5c")`` is redundant when ``commitBatchTimestamp`` is 0 
+
+The optimization introduces a conditional check that evaluates if commitBatchTimestamp is not 0 before executing the require statement. This ensures that the gas-consuming operation of checking block.timestamp >= commitBatchTimestamp + delay is skipped when commitBatchTimestamp is 0, as under this condition, the require statement's condition would always be true. Saves ``50 Gas`` in every iterations.
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/ValidatorTimelock.sol
+
+unchecked {
+            for (uint256 i = 0; i < _newBatchesData.length; ++i) {
+                uint256 commitBatchTimestamp = committedBatchTimestamp[ERA_CHAIN_ID].get(
+                    _newBatchesData[i].batchNumber
+                );
+
+                // Note: if the `commitBatchTimestamp` is zero, that means either:
+                // * The batch was committed, but not through this contract.
+                // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
+                // We allow executing such batches.
+
+                require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
+            }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L195
+
+
 
 
 
