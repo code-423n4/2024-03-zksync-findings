@@ -696,13 +696,11 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 ### [Gas-38] Constructors can be marked payable
 ```
+All contacts
 ```
-```
-```
+
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L90
 
-```
-```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L90
 
 
@@ -739,46 +737,15 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 
 
 
-### [Gas-42] Some state variable could be `private` rather than `public`
-```
-```
 
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L35
+### [Gas-42] Use assembly for Efficient Event Emission
 
-### [Gas-43] Use calldata instead of memory for function arguments that are read only
 ```
-```
-```
+All event emit instances
 ```
 
 
-### [Gas-44] Use assembly for Efficient Event Emission
-```
-```
-```
-```
-
-### [Gas-45] 2 events could be enclosed
-```diff
- admin = currentPendingAdmin;
-        delete pendingAdmin;
-
-        emit NewPendingAdmin(currentPendingAdmin, address(0));  // @audit G:: both event could combined
-        emit NewAdmin(previousAdmin, pendingAdmin);
-```
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L127-128
-
-```
-```
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L40-L41
-
-
-### [Gas-46]
-```
-```
-https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/common/libraries/L2ContractHelper.sol#L
-
-### [Gas-47] abi.encodePacked is more gas efficient than abi.encode
+### [Gas-43] abi.encodePacked is more gas efficient than abi.encode
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L58
@@ -796,7 +763,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L104
 
 
-### [Gas-48] `require( || )` should be split into individual `require` as it will be more gas efficient.
+### [Gas-44] `require( || )` should be split into individual `require` as it will be more gas efficient.
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L240
@@ -805,7 +772,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L76
 
-### [Gas-49] Stack variable is only used once
+### [Gas-45] Stack variable is only used once
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L65
@@ -821,7 +788,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/c
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/state-transition/libraries/TransactionValidator.sol#L135
 
-### [Gas-50] `receive()` should emit something, or do something when it receive funds
+### [Gas-46] `receive()` should emit something, or do something when it receive funds
 ```
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/main/code/contracts/ethereum/contracts/governance/Governance.sol#L262
