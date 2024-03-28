@@ -153,7 +153,7 @@ The code below is intended only for testing purposes. Consider removing code tha
 Recommendations:
 Removing code intended only for testing.
 
-### Low-05 State transition cannot be `unfreeze` by StateTransitionManager after `freeze` due to an error.
+### Low-05 StateTransitionManger cannot unfreeze a frozen chain to an error in StateTransitionManager.sol.
 **Instances(1)**
 A state transition (ST)'s `freezeDiamond()` or `unfreezeDiamond` is intended to be called by either StateTransitionManger or the admin of the state transition. However, there is an error in `unfreezeChain` on StateTransitionManager.sol that will prevent StateTransitionManger from unfreezing a chain when needed.
 
@@ -434,4 +434,34 @@ The newly added system precompile codeOracle.yul and P256Verify.yul addresses [a
 
 Recommendations:
 Consider adding the new precompile address to Constant.sol
+
+### Low-14 Racing condition is possible in current ST freeze implementations
+**Instances(1)**
+Based on [doc](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/docs/Smart%20contract%20Section/L1%20ecosystem%20contracts.md?plain=1#L466-L467), under some conditions, STM can freeze an ST to prevent unsafe usage. One of the conditions is an outdated chain.
+
+>3. Freeze not upgraded chains
+    - After a certain time the chains that are not upgraded are frozen. 
+In addition, an ST can be malicious. When an ST hasn't upgraded to the latest protocol version intentionally for malicious gains, state transition manger contract(STM) can freeze the ST by calling `freezeChain()`. 
+```solidity
+//code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol
+    function freezeChain(uint256 _chainId) external onlyOwner {
+        IZkSyncStateTransition(stateTransition[_chainId]).freezeDiamond();
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L161)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function unfreezeDiamond() external onlyAdminOrStateTransitionManager {
+...
+        diamondStorage.isFrozen = false;
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L143)
+
+However, current Admin.sol also allows an ST admin to unfreeze itself by ST calling  `unfreezeDiamond()`. 
+
+This might create a racing condition between a malicious ST and State transition manager.
+
+Recommendations:
+Consider only allowing stateTransitionManger to unfreeze.
+
 
