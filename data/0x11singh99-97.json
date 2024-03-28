@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "0x11singh99",
+  "risk": "2",
+  "title": "Freezed Chain will never be unfreeze since `StateTransitionManager::unfreezeChain` is calling `freezeDiamond` instead of `unfreezeDiamond`.",
+  "issueId": 97,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/97"
+}
