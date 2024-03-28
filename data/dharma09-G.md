@@ -21,7 +21,7 @@ Please be aware that some code snippets may be shortened to conserve space, and 
 14. [Do not cache global variable in local variable](#g-14-do-not-cache-global-variable-in-local-variable)
 15. [No explicit increment operation is needed for numberOfLogsToProcess as it's done during assignment](#g-15-no-explicit-increment-operation-is-needed-for-numberoflogstoprocess-as-its-done-during-assignment)
 16. [Check previous then update state variable](#g-16-check-previous-then-update-state-variable)
-17. [](#gas-35-use--0-instead-of--0-for-unsigned-integer-comparison)
+17. [use >= instead of ](#gas-35-use--0-instead-of--0-for-unsigned-integer-comparison)
 18. [Use preincrement instaed of state variable for increment](#g-18-use-preincrement-instaed-of-state-variable-for-increment)
 19. [`abi.encode` is more efficient than `abi.encodePacked`](#gas-19-abiencode-is-more-efficient-than-abiencodepacked)
 20. [With assembly, .call (bool success) transfer can be done gas-optimized](#gas-20-with-assembly-call-bool-success-transfer-can-be-done-gas-optimized)
