@@ -285,7 +285,79 @@ Note that unlike (1)&(2), `s.validators` is set only once in (`_setChainIdUpgrad
 Recommendations:
 Consider implementing direct call methods in StateTransitionManager.sol to callow STM controls when needed.
 
+### Low-09 Restrictions on validium mode check can be bypassed 
+**Instances(1)**
+In Admin.sol - `setValidiumMode()`, a check on `s.totalBatchesCommitted == 0` is enforced such that validium mode can only be set after genesis. 
 
+However, this check can be bypassed in `changeFeeParams()`, because validiumMode is part of an element (`s.feeParams.pubdataPricingMode`) of `s.feeParams`. And the entire `s.feeParams` can be re-set anytime with no restrictions on `s.totalBatchesCommitted`. 
+
+As a result, a dangerous state change of validiumMode can be accidentally/maliciously reset in `changeFeeParams`.
+
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function setValidiumMode(
+        PubdataPricingMode _validiumMode
+    ) external onlyAdmin {
+        //@audit this check can be bypassed in `changeFeeParams`
+        require(
+|>            s.totalBatchesCommitted == 0,
+            "AdminFacet: set validium only after genesis"
+        ); // Validium mode can be set only before the first batch is committed
+        s.feeParams.pubdataPricingMode = _validiumMode;
+        emit ValidiumModeStatusUpdate(_validiumMode);
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L90)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function changeFeeParams(FeeParams calldata _newFeeParams) external onlyAdminOrStateTransitionManager {
+        // Double checking that the new fee params are valid, i.e.
+        // the maximal pubdata per batch is not less than the maximal pubdata per priority transaction.
+        require(_newFeeParams.maxPubdataPerBatch >= _newFeeParams.priorityTxMaxPubdata, "n6");
+
+        FeeParams memory oldFeeParams = s.feeParams;
+        //@audit this can reset validiumMode `s.feeParams.pubdataPricingMode` bypassing check in `setValidiumMode`
+ |>     s.feeParams = _newFeeParams;
+
+        emit NewFeeParams(oldFeeParams, _newFeeParams);
+    }
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L73)
+
+Recommendations:
+Add check in `changeFeeParams` to forbid changing `s.feeParams.pubdataPricingMode` after the first batch is committed.
+
+### Low-10 Discrepancy between code and doc - If an ST skips an upgrade, the ST can bypass zksync's `manual intervention` to proceed with upgrading to an older version. 
+**Instances(1)**
+Based on [doc](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/docs/Smart%20contract%20Section/L1%20ecosystem%20contracts.md?plain=1#L104), `if an ST skips an upgrade (i.e. it has version X, it did not upgrade to `X + 1` and now the latest protocol version is `X + 2` there is no built-in way to upgrade). This team will require manual intervention from us to upgrade`.
+
+The above documented manual intervention process from zksync can be bypassed. And the ST can proceed with upgrading to an older version (`X+1` when current version is `X+2`).
+
+In `upgradeChainFromVersion()`, there is no checking on ST's current version `s.protocolVersion` against [StateTranistionManger's protocolVersion](https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L42). And it allows an ST to upgrade to an outdated version regardless of how old the ST's version is. 
+
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function upgradeChainFromVersion(
+        uint256 _oldProtocolVersion,
+        Diamond.DiamondCutData calldata _diamondCut
+    ) external onlyAdminOrStateTransitionManager {
+...
+          //@audit this only ensures that _oldProtoclVersion matches ST's current version. No check on ST's current version is exactly one version behind StateTransitionManger's version.
+|>        require(
+            s.protocolVersion == _oldProtocolVersion,
+            "StateTransition: protocolVersion mismatch in STC when upgrading"
+        );
+        Diamond.diamondCut(_diamondCut);
+        emit ExecuteUpgrade(_diamondCut);
+        require(
+            s.protocolVersion > _oldProtocolVersion,
+            "StateTransition: protocolVersion mismatch in STC after upgrading"
+        );
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L111)
+
+Recommendations:
+If the quote above from the doc should hold true, in `upgradeChainFromVersion()`, add a check to ensure `s.protocolVersion` == StateTransitionManger.protocolVersion() - 1, before allowing ST self-upgrade.
 
 
 
