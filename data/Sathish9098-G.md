@@ -1,5 +1,37 @@
 # GAS OPTIMIZATIONS
 
+| Count | Issue                                                                                   | Gas Saved (Estimate) |
+|-------|-------------------------------------------------------------------------------------------|----------------------|
+| G-1   | State variables can be packed into fewer storage slots                                    | 8000 GAS             |
+| G-1.1 | `stateTransitionManager` and `executionDelay` can be packed in the same slot            | 2000 GAS, 1 SLOT     |
+| G-1.2 | `securityCouncil` and `minDelay` can be packed in the same slot                          | -                    |
+| G-1.3 | `genesisUpgrade` and `protocolVersion` can be packed with the same slot                  | 2000 GAS, 1 SLOT     |
+| G-1.4 | `chainId` and `origin` can be packed in the same slot                                    | 2000 GAS             |
+| G-2   | `l2BridgeAddress[_chainId]`, `l2BridgeAddress[ERA_CHAIN_ID]`, `chainBalance...` mappings can be cached | 400 GAS, 4 SLOAD     |
+| G-3   | State variables should be cached with stack variable                                     | 100 GAS, 1 SLOAD     |
+| G-3.1 | Cache `sharedBridge` storage variable to reduce redundant access                         | 100 GAS, 1 SLOAD     |
+| G-3.2 | `basePubdataSpent` should be cached                                                      | 100 GAS, 1 SLOAD     |
+| G-4   | `AddressAliasHelper.undoL1ToL2Alias(msg.sender)` function value should be cached         | 2000 GAS             |
+| G-5   | Don't cache the `_refundRecipient` as it's already a memory variable                     | 35 GAS               |
+| G-6   | Parameter validation prior to storage validations for better gas efficiency              | -                    |
+| G-7   | Don't emit state variables when a stack variable is available                            | 375 GAS              |
+| G-8   | Using storage instead of memory for structs/arrays saves gas                             | -                    |
+| G-9   | Consolidating multiple mappings into a single struct mapping for gas optimization         | -                    |
+| G-10  | Consolidating multiple event emissions into a single event saves gas                     | 375 GAS              |
+| G-11  | Updating storage while emitting events                                                   | 21 GAS               |
+| G-12  | Assigning state variables directly with named struct constructors wastes gas             | -                    |
+| G-13  | Consider using alternatives to OpenZeppelin                                              | -                    |
+| G-14  | Using assembly to revert with an error message                                           | 300 GAS              |
+| G-15  | Invert if-else statements that have a negation                                           | -                    |
+| G-16  | The check `require(block.timestamp >= commitBatchTimestamp + delay, "5c")` is redundant when `commitBatchTimestamp` is 0 | 50 GAS              |
+| G-17  | `hashL2Bytecode()` can be more gas optimized                                             | 100+ GAS             |
+| G-18  | Skip the shifting process by optimizing `extractNumberFromMeta()`                        | -                    |
+| G-19  | Don't cache state variable only used once                                                | -                    |
+| G-20  | Avoid updating storage when the value hasn't changed                                     | -                    |
+| G-21  | `_l2BlockNumber - 1` Subtraction results should be cached                                | -                |
+| G-22  | ``dictionary.length`` and ``encodedData.length``  length should be cached                                | -                |
+| G-23  | Optimizing Uint32 Storage Updates by Eliminating XOR Misuse                               | -                |
+
 ##
 
 ## [G-1] State variables can be packed into fewer storage slots
@@ -549,21 +581,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-11] Use constants instead of type(uintX).max
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
-/TransactionValidator.sol
-
-49: require(_transaction.to <= type(uint160).max, "ub");
-55: require(_transaction.reserved[1] <= type(uint160).max, "uf");
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/libraries/TransactionValidator.sol#L49
-
-##
-
-## [G-12] via updating storage while emitting events
+## [G-11] via updating storage while emitting events
 
 Via doing so ``21gas`` can be saved with each emit
 
@@ -605,95 +623,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-13] Use assembly to write address/contract type storage values
-
-Using assembly { sstore(state.slot, addr) instead of state = addr can save gas.
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
-/L1ERC20Bridge.sol
-
-36: address public l2Bridge;
-
-39: address public l2TokenBeacon;
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L36
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridgehub
-/Bridgehub.sol
-
-32: address public admin;
-
-35: address private pendingAdmin;
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L32-L35
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
-/StateTransitionManager.sol
-
-39: address public genesisUpgrade;
-
-45: address public validatorTimelock;
-
-51: address public admin;
-
-54: address private pendingAdmin;
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L50-L55
-
-##
-
-## [G-14] Use assembly to validate ``msg.sender``
-
-In this updated version of the contract, we use assembly to load the msg.sender value directly, which is more gas-efficient than using the msg.sender global variable. By loading the msg.sender value into a local variable, we save some gas compared to the standard msg.sender usage.
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
-/L1ERC20Bridge.sol
-
-64: require(msg.sender == address(sharedBridge), "Not shared bridge");
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L64
-
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/governance
-/Governance.sol
-
-59: require(msg.sender == address(this), "Only governance contract itself is allowed to call this function");
-
-65: require(msg.sender == securityCouncil, "Only security council is allowed to call this function");
-
-71:   require(
-            msg.sender == owner() || msg.sender == securityCouncil,
-            "Only the owner and security council are allowed to call this function"
-        );
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/governance/Governance.sol#L59
-
-```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
-/StateTransitionManager.sol
-
-64: require(msg.sender == bridgehub, "StateTransition: only bridgehub");
-
-70: require(msg.sender == admin || msg.sender == owner(), "Bridgehub: not owner or admin");
-
-121: require(msg.sender == currentPendingAdmin, "n42"); // Only proposed by current admin address can claim the admin rights
-
-```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L64
-
-##
-
-## [G-15] Assigning state variables directly with named struct constructors wastes gas
+## [G-12] Assigning state variables directly with named struct constructors wastes gas
 
 Using named arguments for struct means that the compiler needs to organize the fields in memory before doing the assignment, which wastes gas. Set each field directly in storage (use dot-notation), or use the unnamed version of the constructor. Using named arguments for struct constructors can lead to additional gas costs compared to other methods of struct initialization. This is due to the way the Solidity compiler handles memory and storage, especially with respect to struct assignment. 
 
@@ -775,7 +705,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-16] Consider using alternatives to OpenZeppelin
+## [G-13] Consider using alternatives to OpenZeppelin
 
 OpenZeppelin is a great and popular smart contract library, but there are other alternatives that are worth considering. These alternatives offer better gas efficiency and have been tested and recommended by developers.
 
@@ -793,7 +723,7 @@ FILE: package.json
 
 ##
 
-## [G-17] Using assembly to revert with an error message
+## [G-14] Using assembly to revert with an error message
 
 When reverting in solidity code, it is common practice to use a require or revert statement to revert execution with an error message. This can in most cases be further optimized by using assembly to revert with the error message. Saves around 300 GAS per message 
 
@@ -832,7 +762,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-18] Invert if-else statements that have a negation
+## [G-15] Invert if-else statements that have a negation
 
  In theory, the extra ! increases the computational cost. Also should benchmark both methods because the compiler is can sometimes optimize this.
 
@@ -875,7 +805,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-19] This check ``require(block.timestamp >= commitBatchTimestamp + delay, "5c")`` is redundant when ``commitBatchTimestamp`` is 0 
+## [G-16] This check ``require(block.timestamp >= commitBatchTimestamp + delay, "5c")`` is redundant when ``commitBatchTimestamp`` is 0 
 
 The optimization introduces a conditional check that evaluates if commitBatchTimestamp is not 0 before executing the require statement. This ensures that the gas-consuming operation of checking block.timestamp >= commitBatchTimestamp + delay is skipped when commitBatchTimestamp is 0, as under this condition, the require statement's condition would always be true. Saves ``50 Gas`` in every iterations.
 
@@ -902,7 +832,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-20] hashL2Bytecode() can be more gas optimized 
+## [G-17] hashL2Bytecode() can be more gas optimized 
 
 The optimizations reduce EVM opcode execution through calldata access minimization, merge conditional JUMPI operations, consolidate bitwise manipulations into a single execution step, and streamline computational pathways to decrease execution cost and bytecode size. Saves more than ``100 GAS``
 
@@ -954,7 +884,7 @@ function hashL2Bytecode(bytes calldata _bytecode) internal view returns (bytes32
 
 ##
 
-## [G-21] Skip the shifting process by optimizing ``extractNumberFromMeta() ``
+## [G-18] Skip the shifting process by optimizing ``extractNumberFromMeta() ``
 
 Direct Extraction: The optimized version skips the two-step shifting process. Instead, it directly shifts the meta right by offset bits to position the desired number at the right end of the uint256.
 
@@ -987,7 +917,7 @@ function extractNumberFromMeta(uint256 meta, uint256 offset, uint256 size) inter
 
 ##
 
-## [G-22] Don't cache state variable only used once
+## [G-19] Don't cache state variable only used once
 
 ``dataHash`` is read from ``depositHappened[_chainId][_l2TxHash]`` and used exactly once in the require statement. This usage adheres to the principle as it does not unnecessarily cache the state variable into a local variable for multiple uses; instead, it uses the value directly where needed. Similarly, txDataHash is computed and used immediately, aligning with the principle as it's not caching but direct usage. 
 
@@ -1009,7 +939,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-23] Avoid updating storage when the value hasn't changed
+## [G-20] Avoid updating storage when the value hasn't changed
 
 If the old value is equal to the new value, not re-storing the value will avoid a Gsreset (2900 gas), potentially at the expense of a Gcoldsload (2100 gas) or a Gwarmaccess (100 gas)
 
@@ -1035,37 +965,127 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [G-24] Don't declare the variables inside the loop
+## [G-21] ``_l2BlockNumber - 1`` Subtraction results should be cached 
 
-The variables selector and oldFacet are declared outside of the for-loop to avoid redundant declarations on each iteration. This optimization reduces the cost associated with variable declaration and memory allocation during the loop execution.
+The subtraction in second time is redundant 
 
 ```solidity
-FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
-/Diamond.sol
+FILE: 2024-03-zksync/code/system-contracts/contracts
+/SystemContext.sol
 
-137: uint256 selectorsLength = _selectors.length;
-        for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
-            bytes4 selector = _selectors[i];
-            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
-            require(oldFacet.facetAddress == address(0), "J"); // facet for this selector already exists
+unchecked {
+            bytes32 correctPrevBlockHash = _calculateLegacyL2BlockHash(_l2BlockNumber - 1);
+            require(correctPrevBlockHash == _expectedPrevL2BlockHash, "The previous L2 block hash is incorrect");
 
-            _addOneFunction(_facet, selector, _isFacetFreezable);
+            // Whenever we'll be queried about the hashes of the blocks before the upgrade,
+            // we'll use batches' hashes, so we don't need to store 256 previous hashes.
+            // However, we do need to store the last previous hash in order to be able to correctly calculate the
+            // hash of the new L2 block.
+            _setL2BlockHash(_l2BlockNumber - 1, correctPrevBlockHash);
         }
 
-158: for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
-            bytes4 selector = _selectors[i];
-            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
-            require(oldFacet.facetAddress != address(0), "L"); // it is impossible to replace the facet with zero address
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/SystemContext.sol#L255
 
+## 
 
-178:  for (uint256 i = 0; i < selectorsLength; i = i.uncheckedInc()) {
-            bytes4 selector = _selectors[i];
-            SelectorToFacet memory oldFacet = ds.selectorToFacet[selector];
-            require(oldFacet.facetAddress != address(0), "a2"); // Can't delete a non-existent facet
+## [G-22] ``dictionary.length`` and ``encodedData.length``  length should be cached
+
+Instead of calculating length every time caching length reusing is more gas efficient 
+
+```solidity
+FILE: 2024-03-zksync/code/system-contracts/contracts
+/Compressor.sol
+
+ require(
+                dictionary.length / 8 <= encodedData.length / 2,
+                "Dictionary should have at most the same number of entries as the encoded data"
+            );
+
+            for (uint256 encodedDataPointer = 0; encodedDataPointer < encodedData.length; encodedDataPointer += 2) {
+                uint256 indexOfEncodedChunk = uint256(encodedData.readUint16(encodedDataPointer)) * 8;
+                require(indexOfEncodedChunk < dictionary.length, "Encoded chunk index is out of bounds");
+
+                uint64 encodedChunk = dictionary.readUint64(indexOfEncodedChunk);
+                uint64 realChunk = _bytecode.readUint64(encodedDataPointer * 4);
+
+                require(encodedChunk == realChunk, "Encoded chunk does not match the original bytecode");
+            }
+        }
+
 
 
 ```
-https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/libraries/Diamond.sol#L137-L144
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/Compressor.sol#L56-L69
+
+##
+
+## [G-23] Optimizing Uint32 Storage Updates by Eliminating XOR Misuse
+
+Correct Value Setting: The approach uses a mask to clear the specific uint32 area within the storage slot before setting the new value. This method is more straightforward and efficient than using XOR for this purpose.
+Clear and Set: It first creates a mask with all bits set to 1 except the bits corresponding to the target uint32 value, which are cleared (0). Then, it applies this mask to the original slot value to clear the old uint32 value. Finally, it uses the bitwise OR operation to set the new uint32 value in its correct position.
+Mask Construction: The clearMask is constructed to have 0 bits in the position of the target uint32 and 1 bits elsewhere. This ensures only the target uint32 is affected when the mask is applied.
+
+### Original Code
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition/libraries
+/LibMap.sol
+
+/// @dev Updates the uint32 value at `_index` in `map`.
+    /// @param _map The Uint32Map instance containing the packed uint32 values.
+    /// @param _index The index of the uint32 value to set.
+    /// @param _value The new value at the specified index.
+    function set(Uint32Map storage _map, uint256 _index, uint32 _value) internal {
+        unchecked {
+            // Each storage slot can store 256 bits of data.
+            // As uint32 is 32 bits long, 8 uint32s can be packed into one storage slot.
+            // Hence, `_index / 8` is done to find the storage slot that contains the required uint32.
+            uint256 mapIndex = _index / 8;
+            uint256 mapValue = _map.map[mapIndex];
+
+            // First three bits of the original `_index` denotes the position of the uint32 in that slot.
+            // So, '(_index & 7) * 32' is done to find the bit position of the uint32 in that storage slot.
+            uint256 bitOffset = (_index & 7) * 32;
+
+            // XORing a value A with B, and then with A again, gives the original value B.
+            // We will use this property to update the uint32 value in the slot.
+
+            // Shift the bits to the right and retrieve the uint32 value.
+            uint32 oldValue = uint32(mapValue >> bitOffset);
+
+            // Calculate the XOR of the new value and the existing value.
+            uint256 newValueXorOldValue = uint256(oldValue ^ _value);
+
+            // Finally, we XOR the slot with the XOR of the new value and the existing value,
+            // shifted to its proper position. The XOR operation will effectively replace the old value with the new value.
+            _map.map[mapIndex] = (newValueXorOldValue << bitOffset) ^ mapValue;
+        }
+
+```
+
+### Optimized Code
+
+```solidity
+
+function set(Uint32Map storage _map, uint256 _index, uint32 _value) internal {
+    unchecked {
+        uint256 mapIndex = _index / 8; // Determine the storage slot index.
+        uint256 mapValue = _map.map[mapIndex]; // Fetch the current storage slot value.
+
+        uint256 bitOffset = (_index & 7) * 32; // Calculate the bit position of the target uint32 within the slot.
+
+        // Clear the target uint32 value in the slot by applying a mask, then set the new value.
+        uint256 clearMask = ~(uint256(0xFFFFFFFF) << bitOffset);
+        _map.map[mapIndex] = (mapValue & clearMask) | (uint256(_value) << bitOffset);
+    }
+}
+
+``` 
+
+
+
+
 
 
 
