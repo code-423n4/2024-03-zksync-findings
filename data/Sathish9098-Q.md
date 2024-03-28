@@ -2,7 +2,111 @@
 
 ## 
 
-## [L-1] Mismatch Between ``tranferTokenToSharedBridge`` and documented functionality
+##
+
+## [L-] Unclaimable Failed Deposits Due to Insufficient _l1Token Balances in Specific Chains
+
+### Impact
+
+The issue arises in the _claimFailedDeposit function during the process of handling failed deposit claims. The function checks whether the chain has sufficient funds to cover the claim only when hyperbridging is disabled (!hyperbridgingEnabled[_chainId]). If the chain lacks enough funds (chainBalance[_chainId][_l1Token] < _amount), the transaction will revert, leaving the user unable to claim their failed deposit. This behavior could potentially lock user funds in scenarios where the chain balance is insufficient, as the function does not offer an alternative mechanism for users to recover their funds.
+
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1ERC20Bridge.sol
+
+/// @dev Withdraw funds from the initiated deposit, that failed when finalizing on L2.
+    /// @param _depositSender The address of the deposit initiator
+    /// @param _l1Token The address of the deposited L1 ERC20 token
+    /// @param _l2TxHash The L2 transaction hash of the failed deposit finalization
+    /// @param _l2BatchNumber The L2 batch number where the deposit finalization was processed
+    /// @param _l2MessageIndex The position in the L2 logs Merkle tree of the l2Log that was sent with the message
+    /// @param _l2TxNumberInBatch The L2 transaction number in a batch, in which the log was sent
+    /// @param _merkleProof The Merkle proof of the processing L1 -> L2 transaction with deposit finalization
+    function claimFailedDeposit(
+        address _depositSender,
+        address _l1Token,
+        bytes32 _l2TxHash,
+        uint256 _l2BatchNumber,
+        uint256 _l2MessageIndex,
+        uint16 _l2TxNumberInBatch,
+        bytes32[] calldata _merkleProof
+    ) external nonReentrant {
+        uint256 amount = depositAmount[_depositSender][_l1Token][_l2TxHash];
+        require(amount != 0, "2T"); // empty deposit
+        delete depositAmount[_depositSender][_l1Token][_l2TxHash];
+
+        sharedBridge.claimFailedDepositLegacyErc20Bridge(
+            _depositSender,
+            _l1Token,
+            amount,
+            _l2TxHash,
+            _l2BatchNumber,
+            _l2MessageIndex,
+            _l2TxNumberInBatch,
+            _merkleProof
+        );
+        emit ClaimedFailedDeposit(_depositSender, _l1Token, amount);
+    }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1ERC20Bridge.sol#L168C5-L200C6
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/bridge
+/L1SharedBridge.sol
+
+ if (!hyperbridgingEnabled[_chainId]) {
+            // check that the chain has sufficient balance
+            require(chainBalance[_chainId][_l1Token] >= _amount, "ShB n funds");
+            chainBalance[_chainId][_l1Token] -= _amount;
+        }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridge/L1SharedBridge.sol#L347-L351
+
+Mitigation Steps : 
+Introduce a data structure to queue claims that cannot be immediately processed due to insufficient chain balance.
+
+##
+
+## [L-2] ``require(block.timestamp >= commitBatchTimestamp + delay, "5c")`` check always true when ``commitBatchTimestamp`` is 0
+
+```solidity
+FILE: 2024-03-zksync/code/contracts/ethereum/contracts/state-transition
+/ValidatorTimelock.sol
+
+unchecked {
+            for (uint256 i = 0; i < _newBatchesData.length; ++i) {
+                uint256 commitBatchTimestamp = committedBatchTimestamp[ERA_CHAIN_ID].get(
+                    _newBatchesData[i].batchNumber
+                );
+
+                // Note: if the `commitBatchTimestamp` is zero, that means either:
+                // * The batch was committed, but not through this contract.
+                // * The batch wasn't committed at all, so execution will fail in the zkSync contract.
+                // We allow executing such batches.
+
+                require(block.timestamp >= commitBatchTimestamp + delay, "5c"); // The delay is not passed
+            }
+
+```
+https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L195
+
+
+
+
+
+
+
+
+
+
+
+
+##
+
+## [L-1] Mismatch Between ``tranferTokenToSharedBridge()`` and documented functionality
 
 The function name ``tranferTokenToSharedBridge`` is missing an ``s``, making it an incorrect spelling of the intended action, which is ``transfer``.
 
@@ -57,7 +161,7 @@ function transferTokenToSharedBridge(address _token, uint256 _amount) external {
 
 ```
 
-##
+## 
 
 ## [L-1] Typo Error
 
