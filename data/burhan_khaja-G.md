@@ -9,6 +9,7 @@
 |G-07 | Use inline assembly for gas effective zero address checks
 |G-08 | Using assembly to revert with an error message is cheaper than any other method, (further advanced optimization to 4naly3er-report.md GAS-6)
 |G-09 | Calling functions via interface incurs memory expansion costs, so use assembly to re-use data already in memory
+|G-10| Setter function must revert if old value == new value to save unnecessary gas costs
 
 ## G-01 - Making constructor payable saves deployment gas cost
 In solidity, non-payable constructor and functions have an implicit require(msg.value == 0) inserted in them to prevent accidental eth loss. But unfortunately it increases deployment gas costs by 200. 
@@ -1071,3 +1072,28 @@ You can read more about it [here](https://www.rareskills.io/post/gas-optimizatio
 - https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/libraries/TransactionHelper.sol#L377
 
 - https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/zksync/contracts/bridge/L2SharedBridge.sol#L104
+
+## G-10 - Setter function must revert if old value == new value to save unnecessary gas costs
+
+if while executing setter functions, new value == old value you incur unnecessary gas cost, so it is better to revert if new value stays same because reverting refunds gas costs, thereby you make the codebase more gas efficient to use
+
+**Instances:**
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L108
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L51
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/system-contracts/contracts/SystemContext.sol#L112
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L73
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L96
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L110
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L132
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L137
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L142
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/StateTransitionManager.sol#L152
