@@ -8,6 +8,7 @@
 |G-06 | Test if a number is even or odd by checking the last bit instead of using a modulo operator 
 |G-07 | Use inline assembly for gas effective zero address checks
 |G-08 | Using assembly to revert with an error message is cheaper than any other method, (further advanced optimization to 4naly3er-report.md GAS-6)
+|G-09 | Calling functions via interface incurs memory expansion costs, so use assembly to re-use data already in memory
 
 ## G-01 - Making constructor payable saves deployment gas cost
 In solidity, non-payable constructor and functions have an implicit require(msg.value == 0) inserted in them to prevent accidental eth loss. But unfortunately it increases deployment gas costs by 200. 
@@ -318,6 +319,8 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 GAS-6 from [4nalyzer report](https://github.com/code-423n4/2024-03-zksync/blob/main/4naly3er-report.md#gas-6-use-custom-errors-instead-of-revert-strings-to-save-gas) flags that it is better to use custom errors rather than requires for reverting.
 
 Luckily, there is lot more efficient way of doing it and that is using assembly for reverting. By applying this method you will save >300 amount of execution gas costs.
+
+*Demo := similar to G-07*
 
 **Instances:**
 ```solidity
@@ -1030,3 +1033,30 @@ File: system-contracts/contracts/SystemContext.sol
 ```
 [Link to code](https://github.com/code-423n4/2024-03-zksync/blob/main/code/system-contracts/contracts/SystemContext.sol)
 
+## G-09 - Calling functions via interface incurs memory expansion costs, so use assembly to re-use data already in memory
+
+When calling a function on a contract B from another contract A, it’s most convenient to use the interface, create an instance of B with an address and call the function we wish to call. This works very well, but due to how solidity compiles our code, it stores the data to send to contract B in a new memory location thereby expanding memory, sometimes unnecessarily.
+
+
+With inline assembly, we can optimize our code better and save some gas by using previously used memory locations that we don’t need again or (if the calldata contract B  expects is less than 64 bytes) in the scratch space to store our calldata.
+
+You can read more about it [here](https://www.rareskills.io/post/gas-optimization#viewer-17hif)
+
+**Instances:**
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L76
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L160
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L137
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L172
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L187
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L206
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L238
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L304
+
+- https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/bridgehub/Bridgehub.sol#L318
