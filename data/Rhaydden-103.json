@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Rhaydden",
+  "risk": "2",
+  "title": "Incorrect Check for Intrinsic Costs in L1 to L2 Transaction Validation",
+  "issueId": 103,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/103"
+}
