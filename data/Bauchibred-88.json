@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "Bauchibred",
+  "risk": "2",
+  "title": "A malicious operator could set the timestamp to a wrong value and directly have an impact on users",
+  "issueId": 88,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/88"
+}
