@@ -238,6 +238,52 @@ In `_deriveL2GasPrice`, when `l1GasPriceConverted` round to 0. `batchOverheadBas
 Recommendations:
 (1) Consider adding a scaling multiplier for a baseToken (2)Then, scaling up the converted gas price value and then scaling down before baseToken transfer.
 
+### Low-08 Functions intended to be called by both chain Admin and StateTransitionManager can only be called by Admin
+**Instances(3)**
+There are functions in Admin.sol with `onlyAdminOrStateTransitionManager` modifier, which suggests they are intended to be called by both `admin` and StateTransitionManager.
+
+However, StateTransitionManager.sol doesn't have methods or flows to call them, making these functions only callable by chain admin. In case that StateTransitionManger needs to intervene a local chain(perhaps malicious) to change parameters through these functions. 
+(1)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function changeFeeParams(
+        FeeParams calldata _newFeeParams
+    ) external onlyAdminOrStateTransitionManager {
+...
+        FeeParams memory oldFeeParams = s.feeParams;
+        s.feeParams = _newFeeParams;
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L67)
+(2)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function setTokenMultiplier(uint128 _nominator, uint128 _denominator) external onlyAdminOrStateTransitionManager {
+...
+        s.baseTokenGasPriceMultiplierNominator = _nominator;
+        s.baseTokenGasPriceMultiplierDenominator = _denominator;
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L79)
+
+Note that StateTransitionManager.sol doesn't have methods to directly invoke calls to these functions. Neither will StateTransitionManager calls these functions through an upgrade call(`_setChainIdUpgrade()`). 
+
+(3)
+```solidity
+//code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol
+    function setValidator(
+        address _validator,
+        bool _active
+    ) external onlyStateTransitionManager {
+        s.validators[_validator] = _active;
+...
+```
+(https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/chain-deps/facets/Admin.sol#L45)
+
+Note that unlike (1)&(2), `s.validators` is set only once in (`_setChainIdUpgrade()`) as part of the initialization of the new chain. But `s.validators` cannot be updated again when needed and `setValidator` cannot be called by StateTransitionManager.
+
+Recommendations:
+Consider implementing direct call methods in StateTransitionManager.sol to callow STM controls when needed.
 
 
 
