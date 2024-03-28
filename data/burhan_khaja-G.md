@@ -1,12 +1,12 @@
 | ID    | TITLE                                                                                                                           |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
 |G-01 | Making constructor payable saves deployment gas costs                                                                           
-|G-02 | Deployment size can be reduced by optimizing the IPFS hash to have more zeros (or using the --no-cbor-metadata compiler option) |
-|G-03 | Using yul's selfbalance() is cheaper than address(this).balance                                                                 |
-|G-04 | Using bytes32 and assembly for storing strings under 32 bytes  saves gas                                                        |
-|G-05 | Do-While loops are cheaper than for loops                                                                                       |G-06 | Test if a number is even or odd by checking the last bit instead of using a modulo operator 
+|G-02 | Deployment size can be reduced by optimizing the IPFS hash to have more zeros (or using the --no-cbor-metadata compiler option) 
+|G-03 | Using yul's selfbalance() is cheaper than address(this).balance                                                                 
+|G-04 | Using bytes32 and assembly for storing strings under 32 bytes  saves gas                                                        
+|G-05 | Do-While loops are cheaper than for loops                                                                                     
+|G-06 | Test if a number is even or odd by checking the last bit instead of using a modulo operator 
 |G-07 | Use inline assembly for gas effective zero address checks
-
 
 ## G-01 - Making constructor payable saves deployment gas cost
 In solidity, non-payable constructor and functions have an implicit require(msg.value == 0) inserted in them to prevent accidental eth loss. But unfortunately it increases deployment gas costs by 200. 
