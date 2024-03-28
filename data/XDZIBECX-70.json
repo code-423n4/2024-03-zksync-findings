@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "XDZIBECX",
+  "risk": "3",
+  "title": "incorrect Handling of Non-Standard ERC20 Token Transfers",
+  "issueId": 70,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/70"
+}
