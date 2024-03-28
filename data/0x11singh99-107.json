@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "0x11singh99",
+  "risk": "2",
+  "title": "`GenesisUpgrade::upgrade` function can be called by anyone any no. of times, also through proxy due to no access control and can change important values in storage `protocolVersion` and `verifier`.",
+  "issueId": 107,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/107"
+}
