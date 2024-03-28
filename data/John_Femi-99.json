@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "John_Femi",
+  "risk": "2",
+  "title": "Add storage gasp to avoid overwriting storage slots",
+  "issueId": 99,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/99"
+}
