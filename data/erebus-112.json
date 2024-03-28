@@ -1,0 +1,8 @@
+{
+  "contest": 347,
+  "handle": "erebus",
+  "risk": "2",
+  "title": "Unprovable batches will be generated upon doing a system upgrade via shadow proposals",
+  "issueId": 112,
+  "issueUrl": "https://github.com/code-423n4/2024-03-zksync-findings/issues/112"
+}
