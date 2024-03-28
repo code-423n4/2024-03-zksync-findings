@@ -1,10 +1,8 @@
 # QA Report
 
-## 
-
 ##
 
-## [L-] Unclaimable Failed Deposits Due to Insufficient _l1Token Balances in Specific Chains
+## [L-1] Unclaimable Failed Deposits Due to Insufficient _l1Token Balances in Specific Chains
 
 ### Impact
 
@@ -93,20 +91,9 @@ unchecked {
 ```
 https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed8f4a250e13/code/contracts/ethereum/contracts/state-transition/ValidatorTimelock.sol#L195
 
-
-
-
-
-
-
-
-
-
-
-
 ##
 
-## [L-1] Mismatch Between ``tranferTokenToSharedBridge()`` and documented functionality
+## [L-3] Mismatch Between ``tranferTokenToSharedBridge()`` and documented functionality
 
 The function name ``tranferTokenToSharedBridge`` is missing an ``s``, making it an incorrect spelling of the intended action, which is ``transfer``.
 
@@ -124,7 +111,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ## 
 
-## [L-2] Mismatch between comment and the actual implementation
+## [L-4] Mismatch between comment and the actual implementation
 
 - ``Comment Description`` : The comment ``/// @dev transfer token to shared bridge as part of upgrade`` suggests that the function is designed to transfer a specified amount of tokens to the shared bridge, presumably as part of a smart contract upgrade process. The comment implies flexibility in the amount of tokens to be transferred.
 
@@ -163,7 +150,7 @@ function transferTokenToSharedBridge(address _token, uint256 _amount) external {
 
 ## 
 
-## [L-1] Typo Error
+## [L-5] Typo Error
 
 The comment /// @dev tranfer tokens... contains a spelling mistake: tranfer should be transfer.
 
@@ -179,7 +166,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [L-] No same value input check
+## [L-6] No same value input check
 
 There is no check to ensure that the new pending admin (_newPendingAdmin) is different from the current pending admin (s.pendingAdmin). This means that if the function is called with the same value as the current pendingAdmin, it would still execute and emit an event, wasting gas and potentially causing confusion.
 
@@ -200,7 +187,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [L-] Allowance of redundant validator status assignments 
+## [L-7] Allowance of redundant validator status assignments 
 
 The absence of a check to see if _validator is already set to ``_active`` means the function will execute and emit an event even if there is no actual change in status. This can lead to unnecessary gas expenditure and redundant event logs, which could clutter up the event history and potentially confuse off-chain systems or services monitoring these events.
 
@@ -218,7 +205,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [L-] For events for critical changes 
+## [L-8] Emit events for critical changes 
 
 This is a critical aspect of smart contract development, especially for functions that involve significant changes to the contract's operation or state. Emitting events helps in tracking the changes and is crucial for transparency and auditability.
 
@@ -236,7 +223,7 @@ https://github.com/code-423n4/2024-03-zksync/blob/4f0ba34f34a864c354c7e8c47643ed
 
 ##
 
-## [L-] Misleading comment in ``setStateTransitionManager()`` function
+## [L-9] Misleading comment in ``setStateTransitionManager()`` function
 
 Update the comment to accurately reflect the function's purpose. It could be like ``/// @dev Sets a new state transition manager``. The current comment suggests this function used for setting new address validator ``/// @dev Set new validator address.``
 
